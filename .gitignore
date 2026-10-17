@@ -1,28 +1,9 @@
-# Angular specific
-/dist/
-/out-tsc/
-/tmp/
-/coverage/
-/e2e/test-output/
-/.angular/
-.angular/
+# Temporary JDK and Maven installations
+temp-jdk/
+apache-maven-3.9.6/
+apache-maven-3.9.6-bin.zip
 
-# Node modules and dependency files
-/node_modules/
-/package-lock.json
-/yarn.lock
-
-# Environment files
-/.env
-
-# Angular CLI and build artefacts
-/.angular-cli.json
-/.ng/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Also ignore any backend-specific temporaries (though they should be ignored by backend/.gitignore)
+backend/temp-jdk/
+backend/apache-maven-3.9.6/
+backend/apache-maven-3.9.6-bin.zip

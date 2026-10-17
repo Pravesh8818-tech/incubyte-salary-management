@@ -1,0 +1,32 @@
+# SQLite database files
+*.db
+*.db-journal
+
+# Eclipse
+.project
+.classpath
+.settings/
+.metadata/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/ndb/
+/nbcache/
+/nb-*/
+
+# VS Code
+.vscode/
+
+# Spring Boot
+target/
+# Temporary JDK and Maven installations (if placed inside backend)
+temp-jdk/
+apache-maven-3.9.6/
+apache-maven-3.9.6-bin.zip
