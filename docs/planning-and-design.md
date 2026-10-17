@@ -12,7 +12,7 @@
 | Phase | Work | Exit check |
 |---|---|---|
 | 0. Requirements | Confirm MVP, exclusions, assumptions and acceptance criteria | One-page requirements committed before feature work |
-| 1. Foundation | Spring Boot app, Angular app, SQLite connection, health/startup check | Both apps start; database file is created persistently |
+| 1. Foundation | Spring Boot app, Angular v22 app, SQLite connection, health/startup check | Both apps start; database file is created persistently |
 | 2. Domain and schema | Employee model, request validation, unique constraints, indexes | Valid/invalid data behavior covered by tests |
 | 3. Read workflow | List endpoint with pagination, sorting, search and filters; Angular directory | API returns bounded pages and accurate totals |
 | 4. Write workflow | View/create/edit/delete endpoints and UI forms | CRUD happy paths and error states work end to end |
@@ -72,4 +72,4 @@ Use these as examples; commits must reflect the actual changes made and must not
 - **Currency correctness:** test mixed-currency fixtures to prevent cross-currency totals.
 - **Data safety:** keep seeding disabled or guarded outside local/demo environments; never use real employee data in the demo.
 - **Security:** no authentication is in MVP; do not expose the app publicly with real data. Use environment-specific configuration and HTTPS for deployment.
-- **Assessment mismatch:** brief says “AngularJS for Java”; confirm Angular is acceptable in the role context and state the selected Angular version explicitly in README.
+- **Assessment mismatch:** brief says “AngularJS for Java”; decided to use Modern Angular version 22 (see requirements.md); version stated in README.
