@@ -8,6 +8,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 @Entity
@@ -39,7 +41,8 @@ public class Employee {
     @Column(nullable = false)
     private String currency;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(nullable = false, precision = 10, scale = 2,
+            columnDefinition = "NUMERIC(10,2) CHECK (annual_salary >= 0)")
     private BigDecimal annualSalary;
 
     @Column
@@ -62,6 +65,22 @@ public class Employee {
         this.jobTitle = jobTitle;
         this.currency = currency;
         this.annualSalary = annualSalary;
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        Instant now = Instant.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        if (updatedAt == null) {
+            updatedAt = now;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = Instant.now();
     }
 
     // Getters and Setters
