@@ -1,9 +1,2 @@
-# Temporary JDK and Maven installations
-temp-jdk/
-apache-maven-3.9.6/
-apache-maven-3.9.6-bin.zip
-
-# Also ignore any backend-specific temporaries (though they should be ignored by backend/.gitignore)
-backend/temp-jdk/
-backend/apache-maven-3.9.6/
-backend/apache-maven-3.9.6-bin.zip
+# Maven build output
+**/target/
