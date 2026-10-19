@@ -67,6 +67,37 @@ public class Employee {
         this.annualSalary = annualSalary;
     }
 
+    /**
+     * Constructor for testing purposes.
+     * @param id the id
+     * @param employeeCode the employee code
+     * @param fullName the full name
+     * @param email the email
+     * @param country the country
+     * @param department the department
+     * @param jobTitle the job title
+     * @param currency the currency
+     * @param annualSalary the annual salary
+     * @param createdAt the creation timestamp
+     * @param updatedAt the update timestamp
+     */
+    @Deprecated
+    public Employee(Long id, String employeeCode, String fullName, String email, String country,
+                    String department, String jobTitle, String currency, BigDecimal annualSalary,
+                    Instant createdAt, Instant updatedAt) {
+        this.id = id;
+        this.employeeCode = employeeCode;
+        this.fullName = fullName;
+        this.email = email;
+        this.country = country;
+        this.department = department;
+        this.jobTitle = jobTitle;
+        this.currency = currency;
+        this.annualSalary = annualSalary;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();
