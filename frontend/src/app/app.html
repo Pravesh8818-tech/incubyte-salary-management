@@ -1,0 +1,66 @@
+<div class="container">
+  <header>
+    <h1>Incubyte Salary Management</h1>
+    <p>Employee Directory</p>
+  </header>
+
+  <section class="search-bar">
+    <input
+      type="text"
+      placeholder="Search by employee name or code"
+      [(ngModel)]="searchQuery"
+      (keyup.enter)="searchEmployees()"
+    />
+    <button (click)="searchEmployees()">Search</button>
+  </section>
+
+  <section class="controls">
+    <button (click)="loadPreviousPage()" [disabled]="loading || !hasPreviousPage()">Previous</button>
+    <span>Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span>
+    <button (click)="loadNextPage()" [disabled]="loading || !hasNextPage()">Next</button>
+  </section>
+
+  <section class="status" *ngIf="loading(); else loadedContent">
+    <p>Loading employees...</p>
+  </section>
+
+  <ng-template #loadedContent>
+    <section class="error" *ngIf="errorMessage(); else employeeTable">
+      <p class="error-message">{{ errorMessage() }}</p>
+      <button (click)="loadEmployees()" class="retry-button">Retry</button>
+    </section>
+
+    <ng-template #employeeTable>
+      <table class="employee-table" *ngIf="employees().length > 0; else emptyState">
+        <thead>
+          <tr>
+            <th>Employee Code</th>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>Department</th>
+            <th>Country</th>
+            <th>Job Title</th>
+            <th>Currency</th>
+            <th>Annual Salary</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let employee of employees()">
+            <td>{{ employee.employeeCode }}</td>
+            <td>{{ employee.fullName }}</td>
+            <td>{{ employee.email }}</td>
+            <td>{{ employee.department }}</td>
+            <td>{{ employee.country }}</td>
+            <td>{{ employee.jobTitle }}</td>
+            <td>{{ employee.currency }}</td>
+            <td>{{ employee.annualSalary | currency }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <ng-template #emptyState>
+        <p class="empty-state">No employees found.</p>
+      </ng-template>
+    </ng-template>
+  </ng-template>
+</div>
