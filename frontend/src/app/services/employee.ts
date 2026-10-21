@@ -39,6 +39,22 @@ export interface EmployeeQuery {
   direction?: 'asc' | 'desc';
 }
 
+export interface SalaryAnalyticsGroup {
+  name: string;
+  employeeCount: number;
+  totalAnnualSalary: number;
+  averageAnnualSalary: number;
+}
+
+export interface SalaryAnalytics {
+  currency: string;
+  employeeCount: number;
+  totalAnnualSalary: number;
+  averageAnnualSalary: number;
+  byCountry: SalaryAnalyticsGroup[];
+  byDepartment: SalaryAnalyticsGroup[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -72,5 +88,20 @@ export class EmployeeService {
     }
 
     return this.http.get<EmployeePage>(this.apiUrl, { params });
+  }
+
+  getSalaryCurrencies(): Observable<string[]> {
+    return this.http.get<string[]>('http://localhost:8080/api/analytics/salary/currencies');
+  }
+
+  getSalaryAnalytics(currency: string, country?: string, department?: string): Observable<SalaryAnalytics> {
+    let params = new HttpParams().set('currency', currency);
+    if (country?.trim()) {
+      params = params.set('country', country.trim());
+    }
+    if (department?.trim()) {
+      params = params.set('department', department.trim());
+    }
+    return this.http.get<SalaryAnalytics>('http://localhost:8080/api/analytics/salary', { params });
   }
 }

@@ -1,8 +1,65 @@
 <div class="container">
   <header>
     <h1>Incubyte Salary Management</h1>
-    <p>Employee Directory</p>
+    <p>Employee Directory and Salary Insights</p>
   </header>
+
+  <section class="analytics-panel" aria-labelledby="analytics-heading">
+    <div class="analytics-heading">
+      <div>
+        <h2 id="analytics-heading">Salary insights</h2>
+        <p>Totals and averages are shown for one currency at a time.</p>
+      </div>
+      <label>
+        Currency
+        <select [(ngModel)]="selectedCurrency" (change)="loadSalaryAnalytics()" [disabled]="salaryCurrencies().length === 0">
+          <option *ngFor="let currency of salaryCurrencies()" [value]="currency">{{ currency }}</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="analytics-filters">
+      <label>Country <input type="text" placeholder="All countries" [(ngModel)]="countryFilter" /></label>
+      <label>Department <input type="text" placeholder="All departments" [(ngModel)]="departmentFilter" /></label>
+      <button (click)="loadSalaryAnalytics()" [disabled]="analyticsLoading() || !selectedCurrency">Apply filters</button>
+    </div>
+
+    <p class="status" *ngIf="currenciesLoading() || analyticsLoading()">Loading salary insights...</p>
+    <div class="analytics-error" *ngIf="analyticsError() as analyticsMessage">
+      <p>{{ analyticsMessage }}</p>
+      <button (click)="salaryCurrencies().length ? loadSalaryAnalytics() : loadSalaryCurrencies()">Retry</button>
+    </div>
+    <p class="empty-state" *ngIf="!currenciesLoading() && !analyticsLoading() && !analyticsError() && salaryCurrencies().length === 0">
+      No salary data is available yet.
+    </p>
+
+    <ng-container *ngIf="salaryAnalytics() as analytics">
+      <div class="analytics-summary" *ngIf="!currenciesLoading() && !analyticsLoading() && !analyticsError()">
+        <article><span>Employees</span><strong>{{ analytics.employeeCount }}</strong></article>
+        <article><span>Total annual salary ({{ analytics.currency }})</span><strong>{{ analytics.totalAnnualSalary | number:'1.2-2' }} {{ analytics.currency }}</strong></article>
+        <article><span>Average annual salary ({{ analytics.currency }})</span><strong>{{ analytics.averageAnnualSalary | number:'1.2-2' }} {{ analytics.currency }}</strong></article>
+      </div>
+
+      <div class="analytics-breakdowns" *ngIf="!currenciesLoading() && !analyticsLoading() && !analyticsError()">
+        <section>
+          <h3>By country</h3>
+          <p class="empty-state" *ngIf="analytics.byCountry.length === 0">No matching employees for this currency and filter.</p>
+          <table *ngIf="analytics.byCountry.length > 0">
+            <thead><tr><th>Country</th><th>Employees</th><th>Total ({{ analytics.currency }})</th><th>Average ({{ analytics.currency }})</th></tr></thead>
+            <tbody><tr *ngFor="let group of analytics.byCountry"><td>{{ group.name }}</td><td>{{ group.employeeCount }}</td><td>{{ group.totalAnnualSalary | number:'1.2-2' }} {{ analytics.currency }}</td><td>{{ group.averageAnnualSalary | number:'1.2-2' }} {{ analytics.currency }}</td></tr></tbody>
+          </table>
+        </section>
+        <section>
+          <h3>By department</h3>
+          <p class="empty-state" *ngIf="analytics.byDepartment.length === 0">No matching employees for this currency and filter.</p>
+          <table *ngIf="analytics.byDepartment.length > 0">
+            <thead><tr><th>Department</th><th>Employees</th><th>Total ({{ analytics.currency }})</th><th>Average ({{ analytics.currency }})</th></tr></thead>
+            <tbody><tr *ngFor="let group of analytics.byDepartment"><td>{{ group.name }}</td><td>{{ group.employeeCount }}</td><td>{{ group.totalAnnualSalary | number:'1.2-2' }} {{ analytics.currency }}</td><td>{{ group.averageAnnualSalary | number:'1.2-2' }} {{ analytics.currency }}</td></tr></tbody>
+          </table>
+        </section>
+      </div>
+    </ng-container>
+  </section>
 
   <section class="search-bar">
     <input
@@ -15,9 +72,12 @@
   </section>
 
   <section class="controls">
-    <button (click)="loadPreviousPage()" [disabled]="loading || !hasPreviousPage()">Previous</button>
-    <span>Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span>
-    <button (click)="loadNextPage()" [disabled]="loading || !hasNextPage()">Next</button>
+    <button (click)="loadPreviousPage()" [disabled]="loading() || !hasPreviousPage()">Previous</button>
+    <span *ngIf="loading(); else paginationMetadata" aria-live="polite">Loading page...</span>
+    <ng-template #paginationMetadata>
+      <span>{{ paginationSummary() }}</span>
+    </ng-template>
+    <button (click)="loadNextPage()" [disabled]="loading() || !hasNextPage()">Next</button>
   </section>
 
   <section class="status" *ngIf="loading(); else loadedContent">
@@ -27,7 +87,7 @@
   <ng-template #loadedContent>
     <section class="error" *ngIf="errorMessage(); else employeeTable">
       <p class="error-message">{{ errorMessage() }}</p>
-      <button (click)="loadEmployees()" class="retry-button">Retry</button>
+      <button (click)="retryEmployees()" class="retry-button">Retry</button>
     </section>
 
     <ng-template #employeeTable>
