@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Employee, EmployeePage, EmployeeQuery, EmployeeService, SalaryAnalytics } from './services/employee';
+import { Employee, EmployeePage, EmployeeQuery, EmployeeService, SalaryAnalytics, SalaryAnalyticsFilterOptions } from './services/employee';
 
 @Component({
   selector: 'app-root',
@@ -29,6 +29,9 @@ export class App {
   protected readonly analyticsError = signal<string | null>(null);
   protected readonly salaryCurrencies = signal<string[]>([]);
   protected readonly currenciesLoading = signal<boolean>(false);
+  protected readonly salaryFilterOptions = signal<SalaryAnalyticsFilterOptions>({ countries: [], departments: [] });
+  protected readonly filterOptionsLoading = signal<boolean>(false);
+  protected readonly filterOptionsError = signal<string | null>(null);
 
   // Regular variable for search query (two-way binding with ngModel)
   protected searchQuery: string = '';
@@ -36,6 +39,8 @@ export class App {
   protected countryFilter = '';
   protected departmentFilter = '';
   private employeeRequestId = 0;
+  private analyticsRequestId = 0;
+  private filterOptionsRequestId = 0;
 
   constructor(private employeeService: EmployeeService) {}
 
@@ -43,6 +48,25 @@ export class App {
   ngOnInit(): void {
     this.loadEmployees();
     this.loadSalaryCurrencies();
+    this.loadSalaryFilterOptions();
+  }
+
+  loadSalaryFilterOptions(): void {
+    const requestId = ++this.filterOptionsRequestId;
+    this.filterOptionsLoading.set(true);
+    this.filterOptionsError.set(null);
+    this.employeeService.getSalaryFilterOptions().subscribe({
+      next: (options) => {
+        if (requestId !== this.filterOptionsRequestId) return;
+        this.salaryFilterOptions.set(options);
+        this.filterOptionsLoading.set(false);
+      },
+      error: () => {
+        if (requestId !== this.filterOptionsRequestId) return;
+        this.filterOptionsError.set('Failed to load country and department options. Please try again.');
+        this.filterOptionsLoading.set(false);
+      },
+    });
   }
 
   loadSalaryCurrencies(): void {
@@ -65,14 +89,18 @@ export class App {
 
   loadSalaryAnalytics(): void {
     if (!this.selectedCurrency) return;
+    const requestId = ++this.analyticsRequestId;
     this.analyticsLoading.set(true);
     this.analyticsError.set(null);
+    this.salaryAnalytics.set(null);
     this.employeeService.getSalaryAnalytics(this.selectedCurrency, this.countryFilter, this.departmentFilter).subscribe({
       next: (analytics) => {
+        if (requestId !== this.analyticsRequestId) return;
         this.salaryAnalytics.set(analytics);
         this.analyticsLoading.set(false);
       },
       error: () => {
+        if (requestId !== this.analyticsRequestId) return;
         this.analyticsError.set('Failed to load salary analytics. Please try again.');
         this.analyticsLoading.set(false);
       },

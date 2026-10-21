@@ -37,4 +37,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
 
     @Query(value = "SELECT DISTINCT currency FROM employee ORDER BY currency", nativeQuery = true)
     List<String> findDistinctCurrencies();
+
+    @Query(value = "SELECT DISTINCT country FROM employee "
+            + "WHERE country IS NOT NULL AND TRIM(country) <> '' ORDER BY country", nativeQuery = true)
+    List<String> findDistinctCountries();
+
+    @Query(value = "SELECT DISTINCT department FROM employee "
+            + "WHERE department IS NOT NULL AND TRIM(department) <> '' ORDER BY department", nativeQuery = true)
+    List<String> findDistinctDepartments();
 }

@@ -55,6 +55,11 @@ export interface SalaryAnalytics {
   byDepartment: SalaryAnalyticsGroup[];
 }
 
+export interface SalaryAnalyticsFilterOptions {
+  countries: string[];
+  departments: string[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -92,6 +97,10 @@ export class EmployeeService {
 
   getSalaryCurrencies(): Observable<string[]> {
     return this.http.get<string[]>('http://localhost:8080/api/analytics/salary/currencies');
+  }
+
+  getSalaryFilterOptions(): Observable<SalaryAnalyticsFilterOptions> {
+    return this.http.get<SalaryAnalyticsFilterOptions>('http://localhost:8080/api/analytics/salary/filters');
   }
 
   getSalaryAnalytics(currency: string, country?: string, department?: string): Observable<SalaryAnalytics> {

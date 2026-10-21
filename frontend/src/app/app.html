@@ -19,11 +19,28 @@
     </div>
 
     <div class="analytics-filters">
-      <label>Country <input type="text" placeholder="All countries" [(ngModel)]="countryFilter" /></label>
-      <label>Department <input type="text" placeholder="All departments" [(ngModel)]="departmentFilter" /></label>
+      <label>
+        Country
+        <select [(ngModel)]="countryFilter" (change)="loadSalaryAnalytics()" [disabled]="filterOptionsLoading() || !!filterOptionsError()">
+          <option value="">All countries</option>
+          <option *ngFor="let country of salaryFilterOptions().countries" [value]="country">{{ country }}</option>
+        </select>
+      </label>
+      <label>
+        Department
+        <select [(ngModel)]="departmentFilter" (change)="loadSalaryAnalytics()" [disabled]="filterOptionsLoading() || !!filterOptionsError()">
+          <option value="">All departments</option>
+          <option *ngFor="let department of salaryFilterOptions().departments" [value]="department">{{ department }}</option>
+        </select>
+      </label>
       <button (click)="loadSalaryAnalytics()" [disabled]="analyticsLoading() || !selectedCurrency">Apply filters</button>
     </div>
 
+    <p class="status" *ngIf="filterOptionsLoading()">Loading country and department options...</p>
+    <div class="analytics-error" *ngIf="filterOptionsError() as optionsMessage">
+      <p>{{ optionsMessage }}</p>
+      <button (click)="loadSalaryFilterOptions()">Retry options</button>
+    </div>
     <p class="status" *ngIf="currenciesLoading() || analyticsLoading()">Loading salary insights...</p>
     <div class="analytics-error" *ngIf="analyticsError() as analyticsMessage">
       <p>{{ analyticsMessage }}</p>

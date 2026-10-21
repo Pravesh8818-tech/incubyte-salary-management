@@ -1,6 +1,7 @@
 package com.incubyte.salarymanagement.web;
 
 import com.incubyte.salarymanagement.dto.SalaryAnalyticsDto;
+import com.incubyte.salarymanagement.dto.SalaryAnalyticsFilterOptionsDto;
 import com.incubyte.salarymanagement.service.SalaryAnalyticsService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +50,11 @@ public class SalaryAnalyticsController {
     @GetMapping("/currencies")
     public List<String> getCurrencies() {
         return salaryAnalyticsService.getCurrencies();
+    }
+
+    @GetMapping("/filters")
+    public SalaryAnalyticsFilterOptionsDto getFilterOptions() {
+        return salaryAnalyticsService.getFilterOptions();
     }
 
     private ResponseEntity<Map<String, Object>> badRequest(String message) {

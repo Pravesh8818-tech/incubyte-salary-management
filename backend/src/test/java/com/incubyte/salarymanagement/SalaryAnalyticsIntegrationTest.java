@@ -83,6 +83,110 @@ class SalaryAnalyticsIntegrationTest {
     }
 
     @Test
+    void currencyFiltersSummaryAndBothBreakdownsWithMixedCountryCurrencyData() throws Exception {
+        saveMixedAnalyticsEmployees();
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "INR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(3)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(600.00)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(200.00)))
+                .andExpect(jsonPath("$.byCountry", hasSize(2)))
+                .andExpect(jsonPath("$.byCountry[0].name", is("Canada")))
+                .andExpect(jsonPath("$.byCountry[0].employeeCount", is(1)))
+                .andExpect(jsonPath("$.byCountry[1].name", is("India")))
+                .andExpect(jsonPath("$.byCountry[1].employeeCount", is(2)))
+                .andExpect(jsonPath("$.byDepartment", hasSize(2)))
+                .andExpect(jsonPath("$.byDepartment[0].name", is("Engineering")))
+                .andExpect(jsonPath("$.byDepartment[0].employeeCount", is(2)))
+                .andExpect(jsonPath("$.byDepartment[1].name", is("Sales")))
+                .andExpect(jsonPath("$.byDepartment[1].employeeCount", is(1)));
+    }
+
+    @Test
+    void indiaAndInrFilterSummaryAndBothBreakdownsTogether() throws Exception {
+        saveMixedAnalyticsEmployees();
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "INR").param("country", "India"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(2)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(300.00)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(150.00)))
+                .andExpect(jsonPath("$.byCountry", hasSize(1)))
+                .andExpect(jsonPath("$.byCountry[0].name", is("India")))
+                .andExpect(jsonPath("$.byCountry[0].employeeCount", is(2)))
+                .andExpect(jsonPath("$.byDepartment", hasSize(2)))
+                .andExpect(jsonPath("$.byDepartment[0].name", is("Engineering")))
+                .andExpect(jsonPath("$.byDepartment[0].employeeCount", is(1)))
+                .andExpect(jsonPath("$.byDepartment[1].name", is("Sales")))
+                .andExpect(jsonPath("$.byDepartment[1].employeeCount", is(1)));
+    }
+
+    @Test
+    void indiaFilterFindsIndianEmployeesEvenWhenTheyUseDifferentCurrencies() throws Exception {
+        saveMixedAnalyticsEmployees();
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "USD").param("country", "India"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(1)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(400.00)))
+                .andExpect(jsonPath("$.byCountry", hasSize(1)))
+                .andExpect(jsonPath("$.byCountry[0].name", is("India")))
+                .andExpect(jsonPath("$.byCountry[0].employeeCount", is(1)))
+                .andExpect(jsonPath("$.byDepartment", hasSize(1)))
+                .andExpect(jsonPath("$.byDepartment[0].name", is("Engineering")));
+    }
+
+    @Test
+    void departmentFilterAppliesToSummaryAndBothBreakdowns() throws Exception {
+        saveMixedAnalyticsEmployees();
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "INR").param("department", "Engineering"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(2)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(400.00)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(200.00)))
+                .andExpect(jsonPath("$.byCountry", hasSize(2)))
+                .andExpect(jsonPath("$.byCountry[0].name", is("Canada")))
+                .andExpect(jsonPath("$.byCountry[0].employeeCount", is(1)))
+                .andExpect(jsonPath("$.byCountry[1].name", is("India")))
+                .andExpect(jsonPath("$.byCountry[1].employeeCount", is(1)))
+                .andExpect(jsonPath("$.byDepartment", hasSize(1)))
+                .andExpect(jsonPath("$.byDepartment[0].name", is("Engineering")))
+                .andExpect(jsonPath("$.byDepartment[0].employeeCount", is(2)));
+    }
+
+    @Test
+    void countryDepartmentAndCurrencyFiltersApplyTogether() throws Exception {
+        saveMixedAnalyticsEmployees();
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "INR")
+                        .param("country", "India").param("department", "Engineering"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(1)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(100.00)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(100.00)))
+                .andExpect(jsonPath("$.byCountry", hasSize(1)))
+                .andExpect(jsonPath("$.byCountry[0].name", is("India")))
+                .andExpect(jsonPath("$.byDepartment", hasSize(1)))
+                .andExpect(jsonPath("$.byDepartment[0].name", is("Engineering")));
+    }
+
+    @Test
+    void zeroMatchCountryDepartmentAndCurrencyReturnsZeroesAndEmptyBreakdowns() throws Exception {
+        saveMixedAnalyticsEmployees();
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "USD")
+                        .param("country", "India").param("department", "Legal"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(0)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(0.00)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(0.00)))
+                .andExpect(jsonPath("$.byCountry", hasSize(0)))
+                .andExpect(jsonPath("$.byDepartment", hasSize(0)));
+    }
+
+    @Test
     void validCurrencyWithNoEmployeesReturnsAnEmptySummary() throws Exception {
         mockMvc.perform(get("/api/analytics/salary").param("currency", "JPY"))
                 .andExpect(status().isOk())
@@ -104,9 +208,47 @@ class SalaryAnalyticsIntegrationTest {
                 .andExpect(jsonPath("$.message", is("currency must be a supported ISO 4217 three-letter code")));
     }
 
+    @Test
+    void filterOptionsReturnDistinctSortedNonBlankDatabaseValues() throws Exception {
+        employeeRepository.saveAllAndFlush(Arrays.asList(
+                employee("OPT001", "opt1@example.test", "India", "Engineering", "INR", "100.00"),
+                employee("OPT002", "opt2@example.test", "India", "Engineering", "INR", "200.00"),
+                employee("OPT003", "opt3@example.test", "Canada", "Sales", "CAD", "300.00"),
+                employee("OPT004", "opt4@example.test", "", "   ", "USD", "400.00")
+        ));
+
+        mockMvc.perform(get("/api/analytics/salary/filters"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.countries", hasSize(2)))
+                .andExpect(jsonPath("$.countries[0]", is("Canada")))
+                .andExpect(jsonPath("$.countries[1]", is("India")))
+                .andExpect(jsonPath("$.departments", hasSize(2)))
+                .andExpect(jsonPath("$.departments[0]", is("Engineering")))
+                .andExpect(jsonPath("$.departments[1]", is("Sales")));
+    }
+
+    @Test
+    void filterOptionsAreEmptyWhenTheDatabaseHasNoEmployees() throws Exception {
+        mockMvc.perform(get("/api/analytics/salary/filters"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.countries", hasSize(0)))
+                .andExpect(jsonPath("$.departments", hasSize(0)));
+    }
+
     private Employee employee(String code, String email, String country, String department,
                               String currency, String salary) {
         return new Employee(code, email, "Test Employee", country, department, "Analyst", currency,
                 new BigDecimal(salary));
+    }
+
+    private void saveMixedAnalyticsEmployees() {
+        employeeRepository.saveAllAndFlush(Arrays.asList(
+                employee("INR001", "inr1@example.test", "India", "Engineering", "INR", "100.00"),
+                employee("INR002", "inr2@example.test", "India", "Sales", "INR", "200.00"),
+                employee("INR003", "inr3@example.test", "Canada", "Engineering", "INR", "300.00"),
+                employee("USD001", "usd1@example.test", "India", "Engineering", "USD", "400.00"),
+                employee("USD002", "usd2@example.test", "Canada", "Sales", "USD", "500.00"),
+                employee("GBP001", "gbp1@example.test", "Canada", "Engineering", "GBP", "600.00")
+        ));
     }
 }

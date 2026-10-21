@@ -27,4 +27,42 @@ describe('EmployeeService', () => {
     expect(request.request.params.get('search')).toBe('Engineer');
     request.flush({ content: [], number: 1, size: 10, totalElements: 0, totalPages: 0, first: false, last: true, empty: true });
   });
+
+  it('sends trimmed currency, country, and department analytics filters together', () => {
+    service.getSalaryAnalytics('INR', ' India ', ' Engineering ').subscribe();
+
+    const request = httpTestingController.expectOne((req) => req.url === 'http://localhost:8080/api/analytics/salary');
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.get('currency')).toBe('INR');
+    expect(request.request.params.get('country')).toBe('India');
+    expect(request.request.params.get('department')).toBe('Engineering');
+    request.flush({
+      currency: 'INR', employeeCount: 1, totalAnnualSalary: 100.00, averageAnnualSalary: 100.00,
+      byCountry: [{ name: 'India', employeeCount: 1, totalAnnualSalary: 100.00, averageAnnualSalary: 100.00 }],
+      byDepartment: [{ name: 'Engineering', employeeCount: 1, totalAnnualSalary: 100.00, averageAnnualSalary: 100.00 }],
+    });
+  });
+
+  it('loads database-backed salary filter options', () => {
+    service.getSalaryFilterOptions().subscribe((options) => {
+      expect(options.countries).toEqual(['Canada', 'India']);
+      expect(options.departments).toEqual(['Engineering', 'Sales']);
+    });
+
+    const request = httpTestingController.expectOne('http://localhost:8080/api/analytics/salary/filters');
+    expect(request.request.method).toBe('GET');
+    request.flush({ countries: ['Canada', 'India'], departments: ['Engineering', 'Sales'] });
+  });
+
+  it('omits country and department parameters when both analytics filters are set to All', () => {
+    service.getSalaryAnalytics('INR', '', '').subscribe();
+
+    const request = httpTestingController.expectOne((req) => req.url === 'http://localhost:8080/api/analytics/salary');
+    expect(request.request.params.keys()).toEqual(['currency']);
+    expect(request.request.params.get('currency')).toBe('INR');
+    request.flush({
+      currency: 'INR', employeeCount: 3, totalAnnualSalary: 600, averageAnnualSalary: 200,
+      byCountry: [], byDepartment: [],
+    });
+  });
 });

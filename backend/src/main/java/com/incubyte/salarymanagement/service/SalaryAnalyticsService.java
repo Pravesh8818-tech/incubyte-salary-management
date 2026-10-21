@@ -1,6 +1,7 @@
 package com.incubyte.salarymanagement.service;
 
 import com.incubyte.salarymanagement.dto.SalaryAnalyticsDto;
+import com.incubyte.salarymanagement.dto.SalaryAnalyticsFilterOptionsDto;
 import com.incubyte.salarymanagement.dto.SalaryAnalyticsGroupDto;
 import com.incubyte.salarymanagement.repository.EmployeeRepository;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,13 @@ public class SalaryAnalyticsService {
     @Transactional(readOnly = true)
     public List<String> getCurrencies() {
         return employeeRepository.findDistinctCurrencies();
+    }
+
+    @Transactional(readOnly = true)
+    public SalaryAnalyticsFilterOptionsDto getFilterOptions() {
+        return new SalaryAnalyticsFilterOptionsDto(
+                employeeRepository.findDistinctCountries(),
+                employeeRepository.findDistinctDepartments());
     }
 
     private List<SalaryAnalyticsGroupDto> mapGroups(List<Object[]> rows) {

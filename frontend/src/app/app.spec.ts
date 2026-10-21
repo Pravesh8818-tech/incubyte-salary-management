@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, Subject } from 'rxjs';
 import { App } from './app';
-import { Employee, EmployeePage, EmployeeQuery, EmployeeService } from './services/employee';
+import { Employee, EmployeePage, EmployeeQuery, EmployeeService, SalaryAnalytics, SalaryAnalyticsFilterOptions } from './services/employee';
 
 function employee(code: string): Employee {
   return {
@@ -26,20 +26,51 @@ function page(number: number, employees = Array.from({ length: number === 2 ? 1 
   };
 }
 
+function analyticsResult(
+  currency = 'INR',
+  countries = ['Canada', 'India'],
+  departments = ['Engineering', 'Sales'],
+  employeeCount = 3,
+): SalaryAnalytics {
+  const groups = (names: string[]) => names.map((name) => ({
+    name, employeeCount: 1, totalAnnualSalary: 100, averageAnnualSalary: 100,
+  }));
+  return {
+    currency,
+    employeeCount,
+    totalAnnualSalary: employeeCount * 100,
+    averageAnnualSalary: employeeCount === 0 ? 0 : 100,
+    byCountry: groups(countries),
+    byDepartment: groups(departments),
+  };
+}
+
 describe('App employee pagination', () => {
   let getEmployees: ReturnType<typeof vi.fn>;
+  let getSalaryAnalytics: ReturnType<typeof vi.fn>;
+  let getSalaryFilterOptions: ReturnType<typeof vi.fn>;
   let fixture: ComponentFixture<App>;
 
-  async function createApp(employeeRequest: (query: EmployeeQuery) => Observable<EmployeePage>) {
+  async function createApp(
+    employeeRequest: (query: EmployeeQuery) => Observable<EmployeePage>,
+    analyticsRequest: (currency: string, country?: string, department?: string) => Observable<SalaryAnalytics> = () => of(analyticsResult()),
+    currencies: string[] = [],
+    filterOptionsRequest: () => Observable<SalaryAnalyticsFilterOptions> = () => of({
+      countries: ['Canada', 'India'], departments: ['Engineering', 'Sales'],
+    }),
+  ) {
     getEmployees = vi.fn(employeeRequest);
+    getSalaryAnalytics = vi.fn(analyticsRequest);
+    getSalaryFilterOptions = vi.fn(filterOptionsRequest);
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{
         provide: EmployeeService,
         useValue: {
           getEmployees,
-          getSalaryCurrencies: vi.fn(() => of([])),
-          getSalaryAnalytics: vi.fn(),
+          getSalaryCurrencies: vi.fn(() => of(currencies)),
+          getSalaryFilterOptions,
+          getSalaryAnalytics,
         },
       }],
     }).compileComponents();
@@ -162,5 +193,119 @@ describe('App employee pagination', () => {
 
     app.retryEmployees();
     expect(getEmployees).toHaveBeenLastCalledWith({ page: 1, size: 10, search: undefined });
+  });
+
+  it('refreshes analytics when country and department filters change and sends all active filters', async () => {
+    await createApp((query) => of(page(query.page)), undefined, ['USD', 'INR']);
+    fixture.detectChanges();
+
+    const currency = fixture.nativeElement.querySelector('.analytics-heading select') as HTMLSelectElement;
+    currency.value = 'INR';
+    currency.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(getSalaryAnalytics).toHaveBeenLastCalledWith('INR', '', '');
+
+    const country = fixture.nativeElement.querySelector('.analytics-filters label:first-child select') as HTMLSelectElement;
+    country.value = 'India';
+    country.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(getSalaryAnalytics).toHaveBeenLastCalledWith('INR', 'India', '');
+
+    const department = fixture.nativeElement.querySelector('.analytics-filters label:nth-child(2) select') as HTMLSelectElement;
+    department.value = 'Engineering';
+    department.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(getSalaryAnalytics).toHaveBeenLastCalledWith('INR', 'India', 'Engineering');
+
+    country.value = '';
+    country.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(getSalaryAnalytics).toHaveBeenLastCalledWith('INR', '', 'Engineering');
+    department.value = '';
+    department.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(getSalaryAnalytics).toHaveBeenLastCalledWith('INR', '', '');
+  });
+
+  it('ignores late analytics responses and does not keep results from older filters', async () => {
+    const indiaResponse = new Subject<SalaryAnalytics>();
+    const canadaResponse = new Subject<SalaryAnalytics>();
+    await createApp((query) => of(page(query.page)), (_currency, country) => country === 'India'
+      ? indiaResponse
+      : country === 'Canada' ? canadaResponse : of(analyticsResult()), ['INR']);
+
+    const country = fixture.nativeElement.querySelector('.analytics-filters label:first-child select') as HTMLSelectElement;
+    country.value = 'India';
+    country.dispatchEvent(new Event('change'));
+    country.value = 'Canada';
+    country.dispatchEvent(new Event('change'));
+
+    canadaResponse.next(analyticsResult('INR', ['Canada'], ['Engineering'], 1));
+    indiaResponse.next(analyticsResult('INR', ['India'], ['Sales'], 1));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.analytics-summary').textContent).toContain('1');
+    const countryRows = fixture.nativeElement.querySelector('.analytics-breakdowns section:first-child tbody').textContent;
+    const departmentRows = fixture.nativeElement.querySelector('.analytics-breakdowns section:nth-child(2) tbody').textContent;
+    expect(countryRows).toContain('Canada');
+    expect(countryRows).not.toContain('India');
+    expect(departmentRows).toContain('Engineering');
+    expect(departmentRows).not.toContain('Sales');
+  });
+
+  it('shows zero totals and empty breakdown states for a no-match analytics response', async () => {
+    await createApp((query) => of(page(query.page)), () => of(analyticsResult('INR', [], [], 0)), ['INR']);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.analytics-summary').textContent).toContain('0');
+    expect(fixture.nativeElement.textContent).toContain('No matching employees for this currency and filter.');
+    expect(fixture.nativeElement.querySelectorAll('.analytics-breakdowns table').length).toBe(0);
+  });
+
+  it('renders dynamic filter options with default All selections', async () => {
+    await createApp((query) => of(page(query.page)), undefined, ['AUD', 'CAD', 'GBP', 'INR', 'USD'], () => of({
+      countries: ['Australia', 'India'], departments: ['Engineering', 'Marketing'],
+    }));
+    const country = fixture.nativeElement.querySelector('.analytics-filters label:first-child select') as HTMLSelectElement;
+    const department = fixture.nativeElement.querySelector('.analytics-filters label:nth-child(2) select') as HTMLSelectElement;
+
+    expect(country.value).toBe('');
+    expect(department.value).toBe('');
+    expect(Array.from(country.options).map((option) => option.textContent?.trim())).toEqual([
+      'All countries', 'Australia', 'India',
+    ]);
+    expect(Array.from(department.options).map((option) => option.textContent?.trim())).toEqual([
+      'All departments', 'Engineering', 'Marketing',
+    ]);
+    expect(Array.from((fixture.nativeElement.querySelector('.analytics-heading select') as HTMLSelectElement).options)
+      .map((option) => option.value)).toEqual(['AUD', 'CAD', 'GBP', 'INR', 'USD']);
+  });
+
+  it('shows filter-option loading state and enables dropdowns after the options arrive', async () => {
+    const options = new Subject<SalaryAnalyticsFilterOptions>();
+    await createApp((query) => of(page(query.page)), undefined, [], () => options);
+    const country = fixture.nativeElement.querySelector('.analytics-filters label:first-child select') as HTMLSelectElement;
+    expect(fixture.nativeElement.textContent).toContain('Loading country and department options...');
+    expect(country.disabled).toBe(true);
+
+    options.next({ countries: ['India'], departments: ['Engineering'] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Loading country and department options...');
+    expect(fixture.nativeElement.textContent).not.toContain('Failed to load country and department options.');
+    const loadedCountry = fixture.nativeElement.querySelector('.analytics-filters label:first-child select') as HTMLSelectElement;
+    expect(loadedCountry.disabled).toBe(false);
+    expect(Array.from(loadedCountry.options).map((option) => option.textContent?.trim())).toEqual(['All countries', 'India']);
+  });
+
+  it('shows an options error and retry control instead of hardcoded fallback values', async () => {
+    const failedOptions = new Observable<SalaryAnalyticsFilterOptions>((subscriber) => subscriber.error(new Error('offline')));
+    await createApp((query) => of(page(query.page)), undefined, [], () => failedOptions);
+    const country = fixture.nativeElement.querySelector('.analytics-filters label:first-child select') as HTMLSelectElement;
+
+    expect(fixture.nativeElement.textContent).toContain('Failed to load country and department options. Please try again.');
+    expect(fixture.nativeElement.querySelector('.analytics-error button').textContent).toContain('Retry options');
+    expect(country.disabled).toBe(true);
+    expect(Array.from(country.options).map((option) => option.textContent?.trim())).toEqual(['All countries']);
   });
 });
