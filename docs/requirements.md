@@ -1,35 +1,57 @@
-# ACME Salary Management — Requirements (MVP)
+# Requirements and implementation status
 
-**Status:** Proposed for assessment | **Primary user:** HR Manager
+**Application:** Incubyte Salary Management assessment/demo
 
-## Goal
-Replace spreadsheet-based salary tracking with a simple, reliable web application that lets an HR manager maintain and understand salary records for approximately 10,000 employees across multiple countries.
+**Primary demonstrated user:** HR reviewer
 
-## Scope and features
-- **Employee directory:** paginated list, stable sorting, search, and filters for country, department and salary range.
-- **Employee records:** view, create, edit and delete employee records with clear validation and error messages.
-- **Data integrity:** unique employee code and email; required-field validation; non-negative annual salary stored as a decimal with an explicit ISO-style three-letter currency code.
-- **Salary insights:** employee count, total annual salary and average annual salary, grouped/filterable by currency, country and department where supported. Never add values expressed in different currencies.
-- **Seed data:** repeatable process to create 10,000 deterministic synthetic employees for demo and performance checks.
-- **Quality and handover:** automated tests for core business rules/API behavior, responsive Angular UI, setup instructions, design notes and incremental Git commits.
+**Status:** As-built scope, checked against the backend and Angular source
 
-## Deliberately out of scope (and why)
-- **Authentication/authorization:** not specified in the brief and would expand MVP scope. The demo must not be used with real employee data until access control is implemented.
-- **Payroll execution, payslips, tax, benefits and country-specific compliance:** no business rules or legal requirements were provided.
-- **Currency conversion:** no approved exchange-rate source, effective date or accounting policy was supplied; analytics remain currency-specific.
-- **Bulk import/export, audit history, approval workflows and notifications:** valuable follow-up features, but not required to prove the core end-to-end workflow.
-- **Multi-tenant organization support:** the brief describes one organization (ACME), so tenant isolation is not part of this MVP.
+## Overview
 
-## Success / acceptance criteria
-1. HR can list, search, sort, filter and paginate the employee directory without loading all records into the browser.
-2. HR can view, create, edit and delete a record; invalid input and duplicate identifiers produce actionable errors.
-3. A fresh local database can be seeded with exactly 10,000 synthetic employees; rerunning the seed process does not create duplicates.
-4. Salary summaries use a selected currency and correctly report employee count, total and average.
-5. Automated tests cover validation, business rules, API behavior and salary aggregation; the frontend builds and its core user flows are tested.
-6. A reviewer can run the project using the README, inspect meaningful incremental commits, and follow a short demo.
+The application stores employee records in a local SQLite database, exposes a Spring Boot read API, and provides an Angular employee directory and salary insights view. The seed process can create 10,000 deterministic synthetic employees when explicitly enabled against an empty employee table.
 
-## Assumptions and constraints
-- Employee code and email are unique; salary is annual, non-negative and represented to two decimal places.
-- Currency is stored per employee. Currency conversion is not implied.
-- SQLite is selected for low setup friction and the assessment/demo workload of 10,000 records; concurrency and deployment limitations are documented.
-- All seeded people and salary figures are synthetic. This MVP is an assessment demonstration, not a production HR system.
+## Feature status
+
+| Requirement / capability | Status | What exists |
+|---|---|---|
+| Employee directory | Implemented | Angular table with server-side paging and a search box. |
+| Directory search | Implemented | API and UI search across employee code, full name, and email. |
+| Directory paging | Implemented | Zero-based API paging, response metadata, and Previous/Next controls. API page size is at most 100. |
+| Employee list filters | Partial | API accepts exact country and department plus min/max annual salary. These filters are not currently exposed in the directory UI. |
+| Employee sorting | Partial | API accepts a whitelisted `sortBy` and `direction`; the directory UI does not expose sorting controls. |
+| Employee detail | Partial | `GET /api/employees/{id}` exists; there is no detail page in Angular. |
+| Employee create/edit/delete | Out of scope / not implemented | No write endpoints or corresponding UI forms exist. The entity's unique database constraints do not constitute implemented CRUD validation workflows. |
+| Salary Insights | Implemented | Summary count, total annual salary, average annual salary, and breakdowns by country and department. |
+| Currency filtering | Implemented | Currency options come from distinct stored values. Each analytics request is scoped to one currency. |
+| Country/department analytics filters | Implemented | Dynamic distinct, non-empty options; exact-match selections are applied to the summary and both breakdowns. |
+| Salary minimum/maximum analytics | Out of scope | Salary-range filters apply only to the employee-list API; the analytics endpoint does not accept them. |
+| Seed data | Implemented | Explicit opt-in inserts 10,000 deterministic synthetic employees only when the employee table is empty; an existing population aborts without mutation. |
+| Authentication/authorization | Out of scope | No identity or access-control layer is configured. |
+| Currency conversion/payroll | Out of scope | No conversion, payroll, tax, benefits, or compliance behavior exists. |
+
+## Implemented API contract
+
+- `GET /api/employees?page=0&size=20` returns a Spring Data page. Optional parameters: `search`, `country`, `department`, `minSalary`, `maxSalary`, `sortBy`, and `direction`. Page is zero-based; the controller rejects negative pages, sizes outside 1–100, invalid salary values/ranges, and invalid sort directions. Supported sorting fields are whitelisted in the service.
+- `GET /api/employees/{id}` returns the matching employee or HTTP 404.
+- `GET /api/analytics/salary?currency=USD` returns the currency, employee count, total and average annual salary, and country/department groups. Optional `country` and `department` exact-match filters apply consistently to the summary and breakdown queries. Missing or unsupported currency receives HTTP 400; zero matches produce zero money values and empty groups.
+- `GET /api/analytics/salary/currencies` returns currencies currently in the database.
+- `GET /api/analytics/salary/filters` returns distinct non-empty countries and departments currently in the database.
+
+The backend permits browser requests from `http://localhost:4200`. Error bodies for controller validation include timestamp, status, error, and message fields. Employee listing has no API request for writing employee data.
+
+## Data rules evidenced in code
+
+An employee has `id`, `employeeCode`, `fullName`, `email`, `country`, `department`, `jobTitle`, `currency`, `annualSalary`, `createdAt`, and `updatedAt`. Employee code and email are unique and non-null in the table. The salary is a `BigDecimal` column with scale 2 and a SQLite non-negative check. The entity does not declare Jakarta Bean Validation annotations for required text fields, nor a currency-code validator; the analytics controller validates the requested currency using Java's ISO currency registry.
+
+The synthetic data generator creates a unique `EMP` code and unique synthetic email for each of 10,000 records. It uses fixed name, country, department, title, and currency lists and deterministic non-negative two-decimal salaries. Seed country and currency are selected independently from their lists; the application does not encode or enforce a country-to-currency relationship.
+
+## Acceptance checks for the implemented scope
+
+1. Start backend and frontend using the root README commands.
+2. Confirm the employee API returns paged data and stable page metadata; a seeded database reports `totalElements: 10000`.
+3. Search through the directory and navigate between pages.
+4. Request analytics for a single currency, then combine country and department filters; verify summary and both breakdowns reflect the same filter combination.
+5. Verify no-match analytics return zero totals and no breakdown groups.
+6. Run backend tests, Angular tests, and the Angular production build using the commands in the root README.
+
+These checks describe the current application. They do not assert unimplemented CRUD, directory sorting controls, or directory filter controls.

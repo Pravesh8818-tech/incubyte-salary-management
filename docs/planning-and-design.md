@@ -1,75 +1,44 @@
-# Planning and Design Notes
+# Planning and design (as built)
 
-## 1. Delivery principles
-1. Build the smallest complete vertical slice first: database → API → Angular screen.
-2. Prefer readable, boring architecture over premature abstraction.
-3. Keep business rules in services/domain validation, not in controllers or UI components.
-4. Use synthetic data only; verify behavior with automated tests and repeatable local commands.
-5. Make incremental commits so reviewers can see how decisions evolved.
+This note records the current design and practical verification path. It is not a claim that every capability in the original assessment idea was delivered. See [requirements and implementation status](requirements.md) for the feature-by-feature state.
 
-## 2. Proposed implementation sequence
+## Architecture
 
-| Phase | Work | Exit check |
-|---|---|---|
-| 0. Requirements | Confirm MVP, exclusions, assumptions and acceptance criteria | One-page requirements committed before feature work |
-| 1. Foundation | Spring Boot app, Angular v22 app, SQLite connection, health/startup check | Both apps start; database file is created persistently |
-| 2. Domain and schema | Employee model, request validation, unique constraints, indexes | Valid/invalid data behavior covered by tests |
-| 3. Read workflow | List endpoint with pagination, sorting, search and filters; Angular directory | API returns bounded pages and accurate totals |
-| 4. Write workflow | View/create/edit/delete endpoints and UI forms | CRUD happy paths and error states work end to end |
-| 5. Seed data | Deterministic 10,000-record seeder, batching and safe rerun behavior | Count verified; no duplicate seeding on restart |
-| 6. Analytics | Currency-scoped count, total and average; country/department breakdown where supported | Aggregation tests include mixed-currency records |
-| 7. Quality | Service/controller tests, frontend tests/build, validation and error handling | Clean test/build results; documented known limitations |
-| 8. Handover | README, architecture, trade-offs, AI prompts, deployment and demo | A reviewer can reproduce setup and follow demo steps |
+- **Backend:** Java / Spring Boot 3.2.0, Spring Web, Spring Data JPA, Hibernate SQLite community dialect, and SQLite JDBC.
+- **Frontend:** Angular 21.2 with standalone components, Angular signals, `HttpClient`, and template-driven filter controls.
+- **Persistence:** one SQLite file at `${user.home}/salary-management.db` by default; `spring.datasource.url` can override it.
+- **API/UI boundary:** Angular calls the API at `http://localhost:8080`; backend CORS permits `http://localhost:4200`.
+- **Data:** the `Employee` entity contains an ID, unique employee code/email, name, country, department, job title, currency, annual salary, and timestamps.
 
-## 3. Domain and data design
+The backend compiler emits Java 11 bytecode, while Spring Boot 3.2.0 needs Java 17 or later to run. Angular 21.2 supports Node.js 20.19+, 22.12+, or 24.x. See the official [Spring Boot system requirements](https://docs.spring.io/spring-boot/docs/3.2.0/reference/html/getting-started.html#getting-started.system-requirements) and [Angular version compatibility](https://angular.dev/reference/versions).
 
-**Employee fields:** `id`, `employeeCode`, `fullName`, `email`, `country`, `department`, `jobTitle`, `currency`, `annualSalary`, `createdAt`, `updatedAt`.
+## Request and data flow
 
-- Use a database-generated primary key and unique constraints for employee code and email.
-- Store money as a decimal type (`BigDecimal` in Java; suitable decimal/numeric database representation) rather than binary floating point.
-- Validate the currency code format and salary range at the API boundary; database constraints should protect key invariants where practical.
-- Add indexes only for demonstrated query paths (employee code/email uniqueness and commonly filtered/sorted fields). Confirm actual SQLite query behavior before claiming performance improvements.
-- Keep synthetic seed data deterministic so tests and demos are reproducible. Seeding must be opt-in/configurable and must never overwrite real data.
+The employee directory requests bounded pages from `GET /api/employees`, and can search employee code, full name, and email. The employee API also accepts country, department, salary range, and sorting parameters, but the Angular directory currently exposes only search and pagination.
 
-## 4. API design
+Salary Insights loads currencies and distinct country/department options from separate API endpoints, then requests analytics with one currency plus any selected country and department filters. Summary and both breakdowns use the same filters. Monetary values remain in the requested currency; there is no currency conversion.
 
-- `GET /api/employees`: page-based response; accepts `page`, `size`, `sortBy`, `direction`, `search`, `country`, `department`, `minSalary`, `maxSalary`.
-- `GET /api/employees/{id}`: one employee or `404`.
-- `POST /api/employees`: create; return `201` and created record.
-- `PUT /api/employees/{id}`: replace editable employee fields; return updated record or `404`.
-- `DELETE /api/employees/{id}`: delete; return `204` or `404`.
-- `GET /api/analytics/salary?currency=USD`: summaries limited to one currency per request.
+## Seed workflow
 
-Use consistent JSON errors. Invalid fields/filters should return `400`; missing records should return `404`; uniqueness conflicts should be translated to a useful client error. Whitelist sortable fields rather than interpolating arbitrary client input into queries.
+The `EmployeeSeedRunner` only exists when `app.seed.enabled=true`; configuration defaults it to false. The seed service checks that the employee table is empty, generates 10,000 deterministic records, and saves batches of 500 inside a transaction. If employees already exist, the run throws before insertion and leaves the database unchanged. Use the exact command in the root README, and only against an empty assessment/demo database. Normal startup after seeding must omit the opt-in property.
 
-## 5. Testing strategy
+## Verification approach
 
-- **Unit:** request validation, salary rules, currency-aware aggregation logic and service behavior.
-- **Repository/integration:** SQLite persistence, uniqueness constraints, pagination/filter behavior, transactions and error mapping.
-- **API:** status codes and response shapes for valid, invalid, duplicate and missing-record cases.
-- **Frontend:** form validation, loading/empty/error states, pagination/filter interactions, and API service behavior.
-- **Seed/performance sanity:** assert 10,000 records and bounded page responses; record measured results rather than claiming unmeasured performance.
+Commands from their project directories:
 
-Tests should use isolated temporary/test databases and deterministic fixtures. Avoid relying on production-like local database contents.
+```powershell
+# Run from backend/; property override keeps the context smoke test isolated.
+mvn test "-Dspring.datasource.url=jdbc:sqlite::memory:"
+```
 
-## 6. Suggested commit sequence
+```powershell
+# frontend/
+npm test -- --watch=false
+npm run build
+```
 
-1. `docs: add MVP requirements and acceptance criteria`
-2. `chore: scaffold Spring Boot and Angular applications`
-3. `feat: add employee persistence and validation`
-4. `feat: add paginated employee search API`
-5. `feat: add employee CRUD UI`
-6. `feat: seed 10000 synthetic employees safely`
-7. `feat: add currency-aware salary analytics`
-8. `test: cover employee workflows and salary rules`
-9. `docs: document setup, architecture, trade-offs and demo`
+Repository/seed/analytics integration tests configure in-memory SQLite. The application context smoke test otherwise inherits the normal datasource path, so use the Maven datasource override above to keep the complete suite off the persistent developer database. The normal database should not be cleared as part of setup or testing. Documentation does not claim a benchmark or performance result; the seed count is an explicit data-volume requirement rather than a performance measurement.
 
-Use these as examples; commits must reflect the actual changes made and must not be fabricated retroactively.
+## Current gaps
 
-## 7. Risks and checks
-
-- **SQLite dialect/configuration:** confirm startup, schema creation and tests with the exact chosen driver/dialect versions.
-- **Currency correctness:** test mixed-currency fixtures to prevent cross-currency totals.
-- **Data safety:** keep seeding disabled or guarded outside local/demo environments; never use real employee data in the demo.
-- **Security:** no authentication is in MVP; do not expose the app publicly with real data. Use environment-specific configuration and HTTPS for deployment.
-- **Assessment mismatch:** brief says “AngularJS for Java”; decided to use Modern Angular version 22 (see requirements.md); version stated in README.
+There are no employee write endpoints or create/edit/delete UI, no employee detail view, no authentication/authorization, no currency conversion, and no deployment setup. Directory-level sorting/filter controls and analytics salary-range filters are not part of the current UI/API combination. These gaps are intentional assessment/demo limits as documented, not inferred features.
