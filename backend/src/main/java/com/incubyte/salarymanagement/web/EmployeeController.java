@@ -1,11 +1,13 @@
 package com.incubyte.salarymanagement.web;
 
 import com.incubyte.salarymanagement.dto.EmployeeDto;
+import com.incubyte.salarymanagement.dto.EmployeeWriteRequest;
 import com.incubyte.salarymanagement.service.EmployeeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -13,7 +15,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:4200")
 @RequestMapping("/api/employees")
 public class EmployeeController {
 
@@ -93,6 +94,24 @@ public class EmployeeController {
                     .body(errorResponse(HttpStatus.NOT_FOUND.value(), "Employee not found with id: " + id));
         }
         return ResponseEntity.ok(employee);
+    }
+
+    @PostMapping
+    public ResponseEntity<EmployeeDto> createEmployee(@Valid @RequestBody EmployeeWriteRequest request) {
+        EmployeeDto employee = employeeService.createEmployee(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(employee);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<EmployeeDto> updateEmployee(@PathVariable Long id,
+                                                      @Valid @RequestBody EmployeeWriteRequest request) {
+        return ResponseEntity.ok(employeeService.updateEmployee(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEmployee(@PathVariable Long id) {
+        employeeService.deleteEmployee(id);
+        return ResponseEntity.noContent().build();
     }
 
     private ResponseEntity<?> badRequest(String message) {

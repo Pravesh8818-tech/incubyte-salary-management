@@ -10,14 +10,22 @@ import java.util.List;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSpecificationExecutor<Employee> {
 
-    @Query(value = "SELECT COUNT(*), COALESCE(SUM(annual_salary), 0) FROM employee "
+    boolean existsByEmployeeCode(String employeeCode);
+
+    boolean existsByEmail(String email);
+
+    boolean existsByEmployeeCodeAndIdNot(String employeeCode, Long id);
+
+    boolean existsByEmailAndIdNot(String email, Long id);
+
+    @Query(value = "SELECT COUNT(*), COALESCE(SUM(CAST(ROUND(annual_salary * 100, 0) AS INTEGER)), 0) FROM employee "
             + "WHERE currency = :currency "
             + "AND (:country IS NULL OR country = :country) "
             + "AND (:department IS NULL OR department = :department)", nativeQuery = true)
     List<Object[]> summarizeSalary(@Param("currency") String currency, @Param("country") String country,
                                    @Param("department") String department);
 
-    @Query(value = "SELECT country, COUNT(*), COALESCE(SUM(annual_salary), 0) FROM employee "
+    @Query(value = "SELECT country, COUNT(*), COALESCE(SUM(CAST(ROUND(annual_salary * 100, 0) AS INTEGER)), 0) FROM employee "
             + "WHERE currency = :currency "
             + "AND (:country IS NULL OR country = :country) "
             + "AND (:department IS NULL OR department = :department) "
@@ -26,7 +34,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
                                             @Param("country") String country,
                                             @Param("department") String department);
 
-    @Query(value = "SELECT department, COUNT(*), COALESCE(SUM(annual_salary), 0) FROM employee "
+    @Query(value = "SELECT department, COUNT(*), COALESCE(SUM(CAST(ROUND(annual_salary * 100, 0) AS INTEGER)), 0) FROM employee "
             + "WHERE currency = :currency "
             + "AND (:country IS NULL OR country = :country) "
             + "AND (:department IS NULL OR department = :department) "

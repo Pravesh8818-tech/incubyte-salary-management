@@ -25,7 +25,7 @@ public class SalaryAnalyticsService {
     public SalaryAnalyticsDto getSalaryAnalytics(String currency, String country, String department) {
         Object[] totals = employeeRepository.summarizeSalary(currency, normalize(country), normalize(department)).get(0);
         long employeeCount = ((Number) totals[0]).longValue();
-        BigDecimal total = asMoney(totals[1]);
+        BigDecimal total = asMoneyFromCents(totals[1]);
         BigDecimal average = average(total, employeeCount);
 
         List<SalaryAnalyticsGroupDto> countries = mapGroups(employeeRepository.summarizeSalaryByCountry(
@@ -52,7 +52,7 @@ public class SalaryAnalyticsService {
         List<SalaryAnalyticsGroupDto> groups = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
             long count = ((Number) row[1]).longValue();
-            BigDecimal total = asMoney(row[2]);
+            BigDecimal total = asMoneyFromCents(row[2]);
             groups.add(new SalaryAnalyticsGroupDto((String) row[0], count, total, average(total, count)));
         }
         return groups;
@@ -63,11 +63,9 @@ public class SalaryAnalyticsService {
                 : total.divide(BigDecimal.valueOf(count), MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal asMoney(Object value) {
-        if (value instanceof BigDecimal) {
-            return ((BigDecimal) value).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        }
-        return new BigDecimal(value.toString()).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+    private BigDecimal asMoneyFromCents(Object value) {
+        BigDecimal cents = value instanceof BigDecimal ? (BigDecimal) value : new BigDecimal(value.toString());
+        return cents.movePointLeft(MONEY_SCALE).setScale(MONEY_SCALE, RoundingMode.UNNECESSARY);
     }
 
     private String normalize(String filter) {

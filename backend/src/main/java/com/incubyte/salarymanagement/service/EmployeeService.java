@@ -1,6 +1,7 @@
 package com.incubyte.salarymanagement.service;
 
 import com.incubyte.salarymanagement.dto.EmployeeDto;
+import com.incubyte.salarymanagement.dto.EmployeeWriteRequest;
 import com.incubyte.salarymanagement.entity.Employee;
 import com.incubyte.salarymanagement.repository.EmployeeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,9 +10,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
+import java.util.Currency;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -125,5 +130,94 @@ public class EmployeeService {
             return null;
         }
         return mapToDto(employee);
+    }
+
+    @Transactional
+    public EmployeeDto createEmployee(EmployeeWriteRequest request) {
+        validateCurrency(request.getCurrency());
+        ensureUnique(request, null);
+        try {
+            return mapToDto(employeeRepository.saveAndFlush(toEntity(request)));
+        } catch (RuntimeException exception) {
+            if (isUniqueConstraintViolation(exception)) {
+                throw new EmployeeConflictException();
+            }
+            throw exception;
+        }
+    }
+
+    @Transactional
+    public EmployeeDto updateEmployee(Long id, EmployeeWriteRequest request) {
+        Employee employee = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
+        validateCurrency(request.getCurrency());
+        ensureUnique(request, id);
+        apply(request, employee);
+        try {
+            return mapToDto(employeeRepository.saveAndFlush(employee));
+        } catch (RuntimeException exception) {
+            if (isUniqueConstraintViolation(exception)) {
+                throw new EmployeeConflictException();
+            }
+            throw exception;
+        }
+    }
+
+    @Transactional
+    public void deleteEmployee(Long id) {
+        Employee employee = employeeRepository.findById(id).orElseThrow(() -> new EmployeeNotFoundException(id));
+        employeeRepository.delete(employee);
+        employeeRepository.flush();
+    }
+
+    private void ensureUnique(EmployeeWriteRequest request, Long existingId) {
+        boolean duplicateCode = existingId == null
+                ? employeeRepository.existsByEmployeeCode(request.getEmployeeCode().trim())
+                : employeeRepository.existsByEmployeeCodeAndIdNot(request.getEmployeeCode().trim(), existingId);
+        boolean duplicateEmail = existingId == null
+                ? employeeRepository.existsByEmail(request.getEmail().trim())
+                : employeeRepository.existsByEmailAndIdNot(request.getEmail().trim(), existingId);
+        if (duplicateCode || duplicateEmail) {
+            throw new EmployeeConflictException();
+        }
+    }
+
+    private void validateCurrency(String currencyCode) {
+        try {
+            Currency.getInstance(currencyCode.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new EmployeeValidationException("currency", "must be a supported ISO 4217 currency code");
+        }
+    }
+
+    private boolean isUniqueConstraintViolation(Throwable exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException) {
+                SQLException sqlException = (SQLException) cause;
+                String message = sqlException.getMessage();
+                if (sqlException.getErrorCode() == 19 && message != null
+                        && message.toLowerCase(Locale.ROOT).contains("unique constraint failed")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private Employee toEntity(EmployeeWriteRequest request) {
+        return new Employee(request.getEmployeeCode().trim(), request.getEmail().trim(),
+                request.getFullName().trim(), request.getCountry().trim(), request.getDepartment().trim(),
+                request.getJobTitle().trim(), request.getCurrency().trim().toUpperCase(Locale.ROOT),
+                request.getAnnualSalary().setScale(2));
+    }
+
+    private void apply(EmployeeWriteRequest request, Employee employee) {
+        employee.setEmployeeCode(request.getEmployeeCode().trim());
+        employee.setEmail(request.getEmail().trim());
+        employee.setFullName(request.getFullName().trim());
+        employee.setCountry(request.getCountry().trim());
+        employee.setDepartment(request.getDepartment().trim());
+        employee.setJobTitle(request.getJobTitle().trim());
+        employee.setCurrency(request.getCurrency().trim().toUpperCase(Locale.ROOT));
+        employee.setAnnualSalary(request.getAnnualSalary().setScale(2));
     }
 }

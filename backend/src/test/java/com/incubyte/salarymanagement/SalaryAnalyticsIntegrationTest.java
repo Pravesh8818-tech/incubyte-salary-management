@@ -198,6 +198,42 @@ class SalaryAnalyticsIntegrationTest {
     }
 
     @Test
+    void centLevelSalariesUseHalfUpRoundingForTheAverage() throws Exception {
+        employeeRepository.saveAllAndFlush(Arrays.asList(
+                employee("CENT001", "cent1@example.test", "India", "Engineering", "USD", "0.01"),
+                employee("CENT002", "cent2@example.test", "India", "Engineering", "USD", "0.02")
+        ));
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "USD"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(2)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(0.03)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(0.02)))
+                .andExpect(jsonPath("$.byCountry[0].totalAnnualSalary", is(0.03)))
+                .andExpect(jsonPath("$.byCountry[0].averageAnnualSalary", is(0.02)))
+                .andExpect(jsonPath("$.byDepartment[0].totalAnnualSalary", is(0.03)))
+                .andExpect(jsonPath("$.byDepartment[0].averageAnnualSalary", is(0.02)));
+    }
+
+    @Test
+    void largeCurrencyScopedTotalPreservesCents() throws Exception {
+        employeeRepository.saveAllAndFlush(Arrays.asList(
+                employee("LARGE001", "large1@example.test", "India", "Engineering", "USD", "99999999.99"),
+                employee("LARGE002", "large2@example.test", "India", "Engineering", "USD", "88888888.88"),
+                employee("LARGE003", "large3@example.test", "India", "Engineering", "USD", "77777777.77"),
+                employee("OTHER001", "other@example.test", "India", "Engineering", "EUR", "99999999.99")
+        ));
+
+        mockMvc.perform(get("/api/analytics/salary").param("currency", "USD"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeCount", is(3)))
+                .andExpect(jsonPath("$.totalAnnualSalary", is(266666666.64)))
+                .andExpect(jsonPath("$.averageAnnualSalary", is(88888888.88)))
+                .andExpect(jsonPath("$.byCountry[0].totalAnnualSalary", is(266666666.64)))
+                .andExpect(jsonPath("$.byDepartment[0].totalAnnualSalary", is(266666666.64)));
+    }
+
+    @Test
     void missingOrUnsupportedCurrencyIsRejected() throws Exception {
         mockMvc.perform(get("/api/analytics/salary"))
                 .andExpect(status().isBadRequest())

@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.exception.GenericJDBCException;
 import org.hibernate.PropertyValueException;
@@ -172,15 +171,16 @@ class EmployeeRepositoryTest {
                 null, // currency null
                 null  // annualSalary null
         );
-        DataIntegrityViolationException exception = assertThrows(DataIntegrityViolationException.class, () -> {
+        DataAccessException exception = assertThrows(DataAccessException.class, () -> {
             employeeRepository.save(employee);
             employeeRepository.flush();
         });
-        Throwable cause = exception.getCause();
-        // Could be PropertyValueException (Hibernate validation) or SQLException (database constraint)
-        assertTrue(cause instanceof PropertyValueException ||
-                   cause instanceof SQLException,
-                   "Expected PropertyValueException or SQLException");
+        Throwable cause = exception;
+        while (cause.getCause() != null && !(cause instanceof PropertyValueException) && !(cause instanceof SQLException)) {
+            cause = cause.getCause();
+        }
+        assertTrue(cause instanceof PropertyValueException || cause instanceof SQLException,
+                   "Expected PropertyValueException or SQLException, got: " + cause.getClass().getName());
         String msg = cause.getMessage().toLowerCase();
         assertTrue(msg.contains("not-null property references a null or transient value") ||
                    msg.contains("not null constraint failed") ||

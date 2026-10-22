@@ -78,7 +78,7 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void testGetEmployees_allowsAngularDevelopmentOrigin() throws Exception {
+    void testGetEmployees_returnsRequestedNonFirstPageMetadata() throws Exception {
         Page<EmployeeDto> emptyPage = new PageImpl<>(List.of(), PageRequest.of(1, 10), 0);
         when(employeeService.getEmployees(eq(1), eq(10), isNull(), isNull(),
                 isNull(), isNull(), isNull(), isNull(), isNull())).thenReturn(emptyPage);
@@ -86,10 +86,8 @@ class EmployeeControllerTest {
         mockMvc.perform(get("/api/employees")
                         .param("page", "1")
                         .param("size", "10")
-                        .header("Origin", "http://localhost:4200")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"))
                 .andExpect(jsonPath("$.number", is(1)))
                 .andExpect(jsonPath("$.size", is(10)));
     }
