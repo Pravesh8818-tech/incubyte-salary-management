@@ -7,10 +7,11 @@ A local assessment/demo application for browsing synthetic employee records and 
 - Employee directory with server-side pagination and search by employee code, name, or email.
 - Employee detail lookup by database ID through the API.
 - Salary Insights with currency selection, dynamically loaded country and department filters, and count, total, average, and country/department breakdowns.
+- Employee management UI and API operations for validated create, edit, and delete workflows, with directory and analytics refreshes after successful changes.
 - Opt-in generation of 10,000 deterministic synthetic employees in an empty database.
 - Backend and frontend automated tests.
 
-Employee creation, editing, and deletion are not implemented. The Angular directory does not currently expose sorting, country/department, or salary-range filters; the employee-list API accepts those filters and sorting parameters. See [requirements and implementation status](docs/requirements.md) for the full scope assessment.
+The Angular directory provides search and pagination; it does not currently expose sorting, country/department, or salary-range filters even though the employee-list API accepts them. See [requirements and implementation status](docs/requirements.md) for the full scope assessment.
 
 ## Prerequisites
 
@@ -27,10 +28,12 @@ Open two PowerShell terminals at the repository root.
 
 ```powershell
 Set-Location backend
+# Optional; required only for employee create/update/delete. Use a local secret and do not commit it.
+$env:APP_WRITE_API_TOKEN = '<local-only-token>'
 mvn spring-boot:run
 ```
 
-The API listens on `http://localhost:8080`. Normal startup does not seed employees.
+The API listens on `http://localhost:8080`. Normal startup does not seed employees. If you omit `APP_WRITE_API_TOKEN`, reads remain available and write requests fail closed with HTTP 401.
 
 ### 2. Start the frontend
 
@@ -44,9 +47,15 @@ npm start
 
 Open `http://localhost:4200`. The frontend calls the backend at `http://localhost:8080`; the API permits the local Angular origin `http://localhost:4200`.
 
+The frontend's public runtime API setting is in `frontend/public/app-config.js`. The checked-in local default is `http://localhost:8080/api`. For a deployment, set `apiBaseUrl` there to the backend's public HTTPS API base URL, including `/api`, before building/publishing the frontend. This URL is public configuration; never put the write token in this file or in Angular source/build configuration.
+
+Employee reads and salary analytics are public. Employee create, update, and delete requests require the backend environment variable `APP_WRITE_API_TOKEN`; if it is unset, write requests fail closed with HTTP 401. For local use, configure the variable in the backend shell before starting Spring Boot (for example, `$env:APP_WRITE_API_TOKEN = '<local-only-token>'` in PowerShell), then enter the same value in the UI's masked **Write API access** field. The UI keeps it in browser memory only; it is cleared on reload or with **Clear**. The bearer token is attached only to matching POST, PUT, and DELETE requests on the configured API origin and `/api` path. GET requests never receive it. The backend remains authoritative and validates the token.
+
+The backend allows `http://localhost:4200` by default for browser CORS. Set `APP_CORS_ALLOWED_ORIGIN` to the exact deployed frontend origin when hosting the UI elsewhere. CORS is a browser-origin restriction, not an authorization mechanism.
+
 ## Database and seed data
 
-SQLite persists to `${user.home}/salary-management.db` (for example, `C:\Users\<username>\salary-management.db` on Windows). The URL can be overridden with Spring's `spring.datasource.url` property. The database is not stored inside this repository, and `.db` files are ignored by Git.
+SQLite persists to `${user.home}/salary-management.db` (for example, `C:\Users\<username>\salary-management.db` on Windows). The URL can be overridden with Spring's `spring.datasource.url` property. The database is not stored inside this repository. Local `.db`, `.sqlite`, and `.sqlite3` database files and their common journal/WAL sidecars are ignored by Git.
 
 To seed exactly 10,000 deterministic synthetic employees, run the backend once with seeding explicitly enabled. From the repository root:
 
@@ -73,11 +82,30 @@ The paged response includes `totalElements`; after seeding it should equal `1000
 |---|---|
 | `GET /api/employees` | Paged employee listing; accepts `page`, `size`, `search`, `country`, `department`, `minSalary`, `maxSalary`, `sortBy`, and `direction`. Page indices are zero-based and page size is limited to 100. |
 | `GET /api/employees/{id}` | Employee lookup by numeric ID; returns 404 when absent. |
+| `POST /api/employees` | Create an employee; requires `Authorization: Bearer <token>`, returns 201 with the created record. |
+| `PUT /api/employees/{id}` | Replace editable employee fields; requires `Authorization: Bearer <token>`, returns 200, or 404 when absent. |
+| `DELETE /api/employees/{id}` | Delete an employee; requires `Authorization: Bearer <token>`, returns 204, or 404 when absent. |
 | `GET /api/analytics/salary?currency=USD` | Currency-scoped summary and breakdowns; optional exact-match `country` and `department` filters apply to all results. |
 | `GET /api/analytics/salary/currencies` | Distinct currencies present in the database. |
 | `GET /api/analytics/salary/filters` | Distinct non-empty countries and departments present in the database. |
 
 Analytics require a valid ISO 4217 three-letter currency. The API returns HTTP 400 when currency is missing or invalid. A valid currency/filter combination with no matching employees returns zero totals and empty groups. Monetary totals are computed for one currency per request; currency conversion is not performed.
+
+The employee list/by-ID read routes and salary analytics routes are public. The employee write routes in the table require the shared bearer token. CORS allows the configured browser origin only; it does not protect the API from non-browser clients.
+
+Write requests require employee code, name, email, country, department, job title, a supported ISO currency, and a non-negative annual salary with at most two decimal places. Employee code and email must be unique. Invalid data returns HTTP 400 with field errors, duplicates return HTTP 409, and missing records return HTTP 404. Generated IDs and timestamps are managed by the backend.
+
+Example create request:
+
+```http
+POST /api/employees
+Content-Type: application/json
+Authorization: Bearer <write-token>
+
+{"employeeCode":"<unique-code>","fullName":"<synthetic-name>","email":"<unique-address@example.test>","country":"<country>","department":"<department>","jobTitle":"<job-title>","currency":"USD","annualSalary":1250000.50}
+```
+
+The success response is the created employee DTO (including generated `id`, `createdAt`, and `updatedAt`) with HTTP 201. Invalid requests return the common error shape, for example `{"status":400,"message":"Validation failed","fields":{"email":"must be a well-formed email address"}}`. Use the same request fields with `PUT /api/employees/{id}`; `DELETE /api/employees/{id}` returns HTTP 204 without a response body.
 
 ## Test and build
 
@@ -107,9 +135,8 @@ The Maven property override keeps the Spring Boot context smoke test away from t
 
 ## Limitations and assessment scope
 
-- There is no authentication or authorization. Do not expose this demo to the public internet or use real employee data.
+- There is no individual user login, identity, or role system. Writes are gated by one shared bearer token configured on the backend; this is not full user authentication. Reads remain public. CORS restricts browser origins but is not authentication or authorization. Any public deployment must use synthetic, non-sensitive employee data only.
 - SQLite is used for a single-machine assessment/demo workload. Its concurrency and write-scaling limits are not addressed here; the project is not a production payroll platform.
-- The UI is read-only for employee records. There are no create/edit/delete forms or API operations.
 - There is no employee detail screen, currency conversion, payroll execution, audit history, or deployment configuration.
 - The directory UI currently provides search and pagination; sorting, country/department filters, and salary-range filters are available only at the employee-list API level.
 - No demo video is included in the repository.

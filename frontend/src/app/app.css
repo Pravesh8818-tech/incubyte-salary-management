@@ -13,6 +13,17 @@
   background: #fbfcfd;
 }
 
+.write-access { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 24px; padding: 16px 20px; border: 1px solid #dce3e8; border-radius: 8px; background: #fbfcfd; }
+.write-access h2 { margin: 0 0 6px; color: #2c3e50; font-size: 1.1rem; }
+.write-access p { margin: 4px 0; color: #657786; }
+.write-access .token-status { color: #34495e; font-size: .9rem; }
+.token-entry { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.token-entry label { color: #34495e; }
+.token-entry input { min-width: 180px; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; }
+.token-entry button { padding: 9px 12px; border: 0; border-radius: 4px; background: #2c7a7b; color: white; cursor: pointer; }
+.token-entry .secondary-button { background: #657786; }
+.token-entry button:disabled { background: #bdc3c7; cursor: not-allowed; }
+
 .analytics-heading,
 .analytics-filters,
 .analytics-summary {
@@ -43,6 +54,30 @@
 .analytics-breakdowns td { padding: 9px; text-align: left; border-bottom: 1px solid #e5eaee; white-space: nowrap; }
 .analytics-breakdowns th { color: #4c5b67; background: #f0f4f6; }
 .analytics-error { color: #c0392b; }
+
+.employee-management { margin: 0 0 20px; }
+.management-heading,
+.form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.management-heading h2,
+.employee-form-panel h3 { margin: 0 0 6px; color: #2c3e50; }
+.management-heading p { margin: 0; color: #657786; }
+.add-employee-button,
+.form-actions button,
+.row-actions button { padding: 9px 14px; border: 0; border-radius: 4px; background: #2c7a7b; color: white; cursor: pointer; }
+.employee-form-panel { margin: 16px 0; padding: 20px; border: 1px solid #dce3e8; border-radius: 8px; background: #fbfcfd; }
+.employee-form-grid { display: grid; grid-template-columns: minmax(140px, 200px) minmax(180px, 1fr); gap: 12px 16px; align-items: start; }
+.employee-form-grid label { padding-top: 10px; color: #34495e; }
+.employee-form-grid input { box-sizing: border-box; width: 100%; padding: 9px; border: 1px solid #bdc3c7; border-radius: 4px; }
+.field-error { display: block; margin-top: 4px; color: #c0392b; }
+.form-actions { justify-content: flex-start; margin-top: 16px; }
+.form-actions .secondary-button { background: #657786; }
+.row-actions { white-space: nowrap; }
+.row-actions button + button { margin-left: 6px; }
+.row-actions .delete-button { background: #c0392b; }
+.success-message { color: #247a40; }
+.add-employee-button:disabled,
+.form-actions button:disabled,
+.row-actions button:disabled { background: #bdc3c7; cursor: not-allowed; }
 
 header {
   text-align: center;
@@ -174,6 +209,12 @@ header p {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  .write-access { align-items: stretch; flex-direction: column; }
+  .token-entry { align-items: stretch; flex-direction: column; }
+  .management-heading { align-items: flex-start; flex-direction: column; }
+  .employee-form-grid { grid-template-columns: 1fr; gap: 6px; }
+  .employee-form-grid label { padding-top: 8px; }
+  .employee-table { display: block; overflow-x: auto; }
   .analytics-heading { align-items: flex-start; flex-direction: column; }
   .analytics-breakdowns { grid-template-columns: 1fr; }
   .controls {

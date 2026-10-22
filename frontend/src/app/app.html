@@ -4,6 +4,20 @@
     <p>Employee Directory and Salary Insights</p>
   </header>
 
+  <section class="write-access" aria-labelledby="write-access-heading">
+    <div>
+      <h2 id="write-access-heading">Write API access</h2>
+      <p>Enter the assessment write token for create, update, and delete actions. It stays in memory until you clear it or reload this page.</p>
+      <p class="token-status" role="status">{{ writeTokenEntered() ? 'A write token is entered. The backend will verify it when you save.' : 'No write token entered.' }}</p>
+    </div>
+    <form class="token-entry" (ngSubmit)="saveWriteToken()">
+      <label for="write-api-token">Bearer token</label>
+      <input id="write-api-token" type="password" autocomplete="off" [(ngModel)]="writeTokenDraft" name="writeToken" />
+      <button type="submit" [disabled]="!writeTokenDraft.trim()">Use token</button>
+      <button type="button" class="secondary-button" (click)="clearWriteToken()" [disabled]="!writeTokenEntered() && !writeTokenDraft">Clear</button>
+    </form>
+  </section>
+
   <section class="analytics-panel" aria-labelledby="analytics-heading">
     <div class="analytics-heading">
       <div>
@@ -78,6 +92,81 @@
     </ng-container>
   </section>
 
+  <section class="employee-management" aria-labelledby="employee-management-heading">
+    <div class="management-heading">
+      <div>
+        <h2 id="employee-management-heading">Employee management</h2>
+        <p>Create, update, or remove employee records.</p>
+      </div>
+      <button type="button" class="add-employee-button" (click)="openCreateForm()" [disabled]="mutationLoading()">
+        Add Employee
+      </button>
+    </div>
+    <p class="success-message" role="status" *ngIf="mutationMessage() as message">{{ message }}</p>
+    <p class="error-message" role="alert" *ngIf="mutationError() as message">{{ message }}</p>
+
+    <section class="employee-form-panel" *ngIf="employeeFormVisible()" aria-labelledby="employee-form-heading">
+      <h3 id="employee-form-heading">{{ editingEmployeeId() === null ? 'Add employee' : 'Edit employee' }}</h3>
+      <p class="status" *ngIf="editLoading()">Loading employee details...</p>
+      <form [formGroup]="employeeForm" (ngSubmit)="saveEmployee()" *ngIf="!editLoading()">
+        <p class="error-message" role="alert" *ngIf="employeeFormError() as message">{{ message }}</p>
+        <div class="employee-form-grid">
+          <label for="employee-code">Employee code</label>
+          <div>
+            <input id="employee-code" formControlName="employeeCode" autocomplete="off" (input)="clearEmployeeFieldError('employeeCode')" />
+            <small class="field-error" *ngIf="isFieldInvalid('employeeCode')">{{ employeeFieldError('employeeCode', 'Employee code is required.') }}</small>
+          </div>
+
+          <label for="employee-name">Full name</label>
+          <div>
+            <input id="employee-name" formControlName="fullName" autocomplete="name" (input)="clearEmployeeFieldError('fullName')" />
+            <small class="field-error" *ngIf="isFieldInvalid('fullName')">Full name is required.</small>
+          </div>
+
+          <label for="employee-email">Email</label>
+          <div>
+            <input id="employee-email" type="email" formControlName="email" autocomplete="email" (input)="clearEmployeeFieldError('email')" />
+            <small class="field-error" *ngIf="isFieldInvalid('email')">{{ employeeFieldError('email', employeeForm.controls.email.errors?.['email'] ? 'Enter a valid email address.' : 'Email is required.') }}</small>
+          </div>
+
+          <label for="employee-country">Country</label>
+          <div>
+            <input id="employee-country" formControlName="country" (input)="clearEmployeeFieldError('country')" />
+            <small class="field-error" *ngIf="isFieldInvalid('country')">Country is required.</small>
+          </div>
+
+          <label for="employee-department">Department</label>
+          <div>
+            <input id="employee-department" formControlName="department" (input)="clearEmployeeFieldError('department')" />
+            <small class="field-error" *ngIf="isFieldInvalid('department')">Department is required.</small>
+          </div>
+
+          <label for="employee-job-title">Job title</label>
+          <div>
+            <input id="employee-job-title" formControlName="jobTitle" (input)="clearEmployeeFieldError('jobTitle')" />
+            <small class="field-error" *ngIf="isFieldInvalid('jobTitle')">Job title is required.</small>
+          </div>
+
+          <label for="employee-currency">Currency (ISO code)</label>
+          <div>
+            <input id="employee-currency" formControlName="currency" maxlength="3" autocapitalize="characters" (input)="clearEmployeeFieldError('currency')" />
+            <small class="field-error" *ngIf="isFieldInvalid('currency')">Use a supported, three-letter uppercase currency code.</small>
+          </div>
+
+          <label for="employee-salary">Annual salary</label>
+          <div>
+            <input id="employee-salary" type="number" min="0" max="99999999.99" step="0.01" formControlName="annualSalary" (input)="clearEmployeeFieldError('annualSalary')" />
+            <small class="field-error" *ngIf="isFieldInvalid('annualSalary')">Enter a non-negative salary with at most two decimal places.</small>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" [disabled]="mutationLoading()">{{ mutationLoading() ? 'Saving...' : (editingEmployeeId() === null ? 'Create employee' : 'Save changes') }}</button>
+          <button type="button" class="secondary-button" (click)="closeEmployeeForm()" [disabled]="mutationLoading()">Cancel</button>
+        </div>
+      </form>
+    </section>
+  </section>
+
   <section class="search-bar">
     <input
       type="text"
@@ -119,6 +208,7 @@
             <th>Job Title</th>
             <th>Currency</th>
             <th>Annual Salary</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -130,7 +220,11 @@
             <td>{{ employee.country }}</td>
             <td>{{ employee.jobTitle }}</td>
             <td>{{ employee.currency }}</td>
-            <td>{{ employee.annualSalary | currency }}</td>
+            <td>{{ employee.annualSalary | currency:employee.currency:'code':'1.2-2' }}</td>
+            <td class="row-actions">
+              <button type="button" (click)="editEmployee(employee)" [disabled]="mutationLoading() || editLoading()" [attr.aria-label]="'Edit ' + employee.fullName">Edit</button>
+              <button type="button" class="delete-button" (click)="deleteEmployee(employee)" [disabled]="mutationLoading()" [attr.aria-label]="'Delete ' + employee.fullName">Delete</button>
+            </td>
           </tr>
         </tbody>
       </table>

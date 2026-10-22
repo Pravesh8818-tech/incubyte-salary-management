@@ -12,6 +12,12 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+## API URL and employee write access
+
+The frontend reads its public API base URL from `public/app-config.js`. The local default is `http://localhost:8080/api`, which matches the backend's local port and employee/analytics route prefix. For a deployment, configure `apiBaseUrl` to the backend's public HTTPS URL including `/api` before building or publishing the frontend. This is public configuration; do not put credentials or the write token in this file.
+
+Employee list/by-ID reads and salary analytics are public. Create, update, and delete requests require the backend's `APP_WRITE_API_TOKEN` environment variable. If it is unset, the backend rejects writes with HTTP 401. The operator enters the same token in the masked **Write API access** field in the UI. The token is held in memory, is cleared on reload, and can be cleared with the UI button. The interceptor attaches it only to matching POST, PUT, and DELETE requests for the configured API origin and path; it never adds the token to GET requests. CORS restricts browser origins and does not replace API authorization. This shared token does not provide individual user accounts or roles; public deployments must contain only synthetic, non-sensitive employee data.
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
@@ -44,15 +50,9 @@ To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use th
 ng test
 ```
 
-## Running end-to-end tests
+## End-to-end testing
 
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+No end-to-end test runner or `e2e` target is configured in this project. The available automated frontend tests are unit/component tests run with `ng test`; use the root README for the complete assessment verification commands.
 
 ## Additional Resources
 

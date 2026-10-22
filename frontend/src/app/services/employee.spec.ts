@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { API_BASE_URL, resolveApiBaseUrl } from './api-config';
 import { EmployeeService } from './employee';
 
 describe('EmployeeService', () => {
@@ -9,7 +10,7 @@ describe('EmployeeService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: API_BASE_URL, useValue: 'https://backend.example.test/api' }],
     });
     service = TestBed.inject(EmployeeService);
     httpTestingController = TestBed.inject(HttpTestingController);
@@ -20,7 +21,7 @@ describe('EmployeeService', () => {
   it('sends page index 1, page size 10, and the current search filter', () => {
     service.getEmployees({ page: 1, size: 10, search: ' Engineer ' }).subscribe();
 
-    const request = httpTestingController.expectOne((req) => req.url === 'http://localhost:8080/api/employees');
+    const request = httpTestingController.expectOne((req) => req.url === 'https://backend.example.test/api/employees');
     expect(request.request.method).toBe('GET');
     expect(request.request.params.get('page')).toBe('1');
     expect(request.request.params.get('size')).toBe('10');
@@ -31,7 +32,7 @@ describe('EmployeeService', () => {
   it('sends trimmed currency, country, and department analytics filters together', () => {
     service.getSalaryAnalytics('INR', ' India ', ' Engineering ').subscribe();
 
-    const request = httpTestingController.expectOne((req) => req.url === 'http://localhost:8080/api/analytics/salary');
+    const request = httpTestingController.expectOne((req) => req.url === 'https://backend.example.test/api/analytics/salary');
     expect(request.request.method).toBe('GET');
     expect(request.request.params.get('currency')).toBe('INR');
     expect(request.request.params.get('country')).toBe('India');
@@ -49,7 +50,7 @@ describe('EmployeeService', () => {
       expect(options.departments).toEqual(['Engineering', 'Sales']);
     });
 
-    const request = httpTestingController.expectOne('http://localhost:8080/api/analytics/salary/filters');
+    const request = httpTestingController.expectOne('https://backend.example.test/api/analytics/salary/filters');
     expect(request.request.method).toBe('GET');
     request.flush({ countries: ['Canada', 'India'], departments: ['Engineering', 'Sales'] });
   });
@@ -57,12 +58,41 @@ describe('EmployeeService', () => {
   it('omits country and department parameters when both analytics filters are set to All', () => {
     service.getSalaryAnalytics('INR', '', '').subscribe();
 
-    const request = httpTestingController.expectOne((req) => req.url === 'http://localhost:8080/api/analytics/salary');
+    const request = httpTestingController.expectOne((req) => req.url === 'https://backend.example.test/api/analytics/salary');
     expect(request.request.params.keys()).toEqual(['currency']);
     expect(request.request.params.get('currency')).toBe('INR');
     request.flush({
       currency: 'INR', employeeCount: 3, totalAnnualSalary: 600, averageAnnualSalary: 200,
       byCountry: [], byDepartment: [],
     });
+  });
+
+  it('uses the existing employee routes for create, update, and delete', () => {
+    const write = {
+      employeeCode: 'EMP-1', fullName: 'Test Employee', email: 'test@example.test', country: 'India',
+      department: 'Engineering', jobTitle: 'Developer', currency: 'INR', annualSalary: 123.45,
+    };
+    service.createEmployee(write).subscribe();
+    const create = httpTestingController.expectOne('https://backend.example.test/api/employees');
+    expect(create.request.method).toBe('POST');
+    expect(create.request.body).toEqual(write);
+    create.flush({ id: 1, ...write });
+
+    service.updateEmployee(1, write).subscribe();
+    const update = httpTestingController.expectOne('https://backend.example.test/api/employees/1');
+    expect(update.request.method).toBe('PUT');
+    expect(update.request.body).toEqual(write);
+    update.flush({ id: 1, ...write });
+
+    service.deleteEmployee(1).subscribe();
+    const deletion = httpTestingController.expectOne('https://backend.example.test/api/employees/1');
+    expect(deletion.request.method).toBe('DELETE');
+    deletion.flush(null);
+  });
+
+  it('resolves and normalizes a public runtime API base URL', () => {
+    expect(resolveApiBaseUrl({ apiBaseUrl: 'https://salary-api.example.test/api/' }))
+      .toBe('https://salary-api.example.test/api');
+    expect(resolveApiBaseUrl({ apiBaseUrl: '  ' })).toBe('http://localhost:8080/api');
   });
 });

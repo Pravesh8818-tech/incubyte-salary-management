@@ -49,6 +49,10 @@ describe('App employee pagination', () => {
   let getEmployees: ReturnType<typeof vi.fn>;
   let getSalaryAnalytics: ReturnType<typeof vi.fn>;
   let getSalaryFilterOptions: ReturnType<typeof vi.fn>;
+  let getEmployeeById: ReturnType<typeof vi.fn>;
+  let createEmployee: ReturnType<typeof vi.fn>;
+  let updateEmployee: ReturnType<typeof vi.fn>;
+  let deleteEmployee: ReturnType<typeof vi.fn>;
   let fixture: ComponentFixture<App>;
 
   async function createApp(
@@ -62,6 +66,10 @@ describe('App employee pagination', () => {
     getEmployees = vi.fn(employeeRequest);
     getSalaryAnalytics = vi.fn(analyticsRequest);
     getSalaryFilterOptions = vi.fn(filterOptionsRequest);
+    getEmployeeById = vi.fn(() => of(employee('EMP00001')));
+    createEmployee = vi.fn(() => of(employee('EMP00001')));
+    updateEmployee = vi.fn(() => of(employee('EMP00001')));
+    deleteEmployee = vi.fn(() => of(void 0));
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{
@@ -71,6 +79,10 @@ describe('App employee pagination', () => {
           getSalaryCurrencies: vi.fn(() => of(currencies)),
           getSalaryFilterOptions,
           getSalaryAnalytics,
+          getEmployeeById,
+          createEmployee,
+          updateEmployee,
+          deleteEmployee,
         },
       }],
     }).compileComponents();
@@ -307,5 +319,122 @@ describe('App employee pagination', () => {
     expect(fixture.nativeElement.querySelector('.analytics-error button').textContent).toContain('Retry options');
     expect(country.disabled).toBe(true);
     expect(Array.from(country.options).map((option) => option.textContent?.trim())).toEqual(['All countries']);
+  });
+
+  it('validates the employee form and creates an employee before refreshing directory and analytics', async () => {
+    await createApp((query) => of(page(query.page)), undefined, ['INR']);
+    const app = fixture.componentInstance;
+    app.openCreateForm();
+    app.saveEmployee();
+    fixture.detectChanges();
+    expect(createEmployee).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain('Employee code is required.');
+
+    app.employeeForm.setValue({
+      employeeCode: ' EMP-NEW-001 ', fullName: ' New Employee ', email: 'new@example.test',
+      country: ' India ', department: ' Engineering ', jobTitle: 'Developer', currency: 'INR', annualSalary: 1234.5,
+    });
+    app.saveEmployee();
+    fixture.detectChanges();
+
+    expect(createEmployee).toHaveBeenCalledWith({
+      employeeCode: 'EMP-NEW-001', fullName: 'New Employee', email: 'new@example.test', country: 'India',
+      department: 'Engineering', jobTitle: 'Developer', currency: 'INR', annualSalary: 1234.5,
+    });
+    expect(getEmployees).toHaveBeenCalledTimes(2);
+    expect(getSalaryAnalytics).toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).toContain('Employee created successfully.');
+  });
+
+  it('loads an employee into the edit form and updates it without changing the directory page', async () => {
+    await createApp((query) => of(page(query.page)), undefined, ['INR']);
+    const app = fixture.componentInstance;
+    app.loadNextPage();
+    const selected = employee('EMP00011');
+    getEmployeeById.mockReturnValueOnce(of({ ...selected, fullName: 'Loaded Employee' }));
+    app.editEmployee(selected);
+    await fixture.whenStable();
+    expect(app.employeeForm.controls.fullName.value).toBe('Loaded Employee');
+    app.employeeForm.controls.fullName.setValue('Edited Employee');
+    app.saveEmployee();
+    fixture.detectChanges();
+
+    expect(updateEmployee).toHaveBeenCalledWith(selected.id, expect.objectContaining({ fullName: 'Edited Employee' }));
+    expect(getEmployees).toHaveBeenLastCalledWith({ page: 1, size: 10, search: undefined });
+    expect(fixture.nativeElement.textContent).toContain('Employee updated successfully.');
+  });
+
+  it('shows backend validation errors and does not report successful mutation', async () => {
+    await createApp((query) => of(page(query.page)), undefined, []);
+    createEmployee.mockImplementation(() => new Observable<Employee>((subscriber) => subscriber.error(new HttpErrorResponse({
+      status: 400,
+      error: { message: 'Validation failed', fields: { employeeCode: 'Employee code is already in use.' } },
+    }))));
+    const app = fixture.componentInstance;
+    app.openCreateForm();
+    app.employeeForm.setValue({
+      employeeCode: 'EMP-NEW-001', fullName: 'New Employee', email: 'new@example.test', country: 'India',
+      department: 'Engineering', jobTitle: 'Developer', currency: 'INR', annualSalary: 10,
+    });
+    app.saveEmployee();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Validation failed');
+    expect(fixture.nativeElement.textContent).toContain('Employee code is already in use.');
+    expect(fixture.nativeElement.textContent).not.toContain('Employee created successfully.');
+    expect(getEmployees).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the operator to enter or check the token after an unauthorized write', async () => {
+    await createApp((query) => of(page(query.page)), undefined, []);
+    createEmployee.mockImplementation(() => new Observable<Employee>((subscriber) => subscriber.error(
+      new HttpErrorResponse({ status: 401, statusText: 'Unauthorized' }),
+    )));
+    const app = fixture.componentInstance;
+    app.openCreateForm();
+    app.employeeForm.setValue({
+      employeeCode: 'EMP-NEW-001', fullName: 'New Employee', email: 'new@example.test', country: 'India',
+      department: 'Engineering', jobTitle: 'Developer', currency: 'INR', annualSalary: 10,
+    });
+    app.saveEmployee();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('The write API rejected this request. Enter or check the write token');
+    expect(fixture.nativeElement.textContent).not.toContain('fake-assessment-token');
+  });
+
+  it('keeps the entered token masked in the UI and clears the in-memory token on request', async () => {
+    await createApp((query) => of(page(query.page)));
+    const input = fixture.nativeElement.querySelector('#write-api-token') as HTMLInputElement;
+    expect(input.type).toBe('password');
+
+    input.value = 'fake-assessment-token';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (input.closest('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('A write token is entered.');
+    expect(fixture.nativeElement.textContent).not.toContain('fake-assessment-token');
+    fixture.componentInstance.clearWriteToken();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('No write token entered.');
+  });
+
+  it('requires delete confirmation, refreshes after confirmation, and reports delete errors', async () => {
+    await createApp((query) => of(page(query.page)), undefined, ['INR']);
+    const app = fixture.componentInstance;
+    const target = employee('EMP00001');
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    app.deleteEmployee(target);
+    fixture.detectChanges();
+    expect(deleteEmployee).not.toHaveBeenCalled();
+    expect(getEmployees).toHaveBeenCalledTimes(1);
+
+    app.deleteEmployee(target);
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Employee EMP00001'));
+    expect(deleteEmployee).toHaveBeenCalledWith(target.id);
+    expect(getEmployees).toHaveBeenCalledTimes(2);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('was deleted.');
+    confirmSpy.mockRestore();
   });
 });

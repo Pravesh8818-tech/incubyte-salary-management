@@ -1,14 +1,15 @@
 # Architecture diagrams
 
-These diagrams represent current request flows, not proposed employee-write behavior.
+These diagrams represent the current request flows, including the shared bearer-token check on employee writes.
 
 ## 1. Implemented system context
 
 ```mermaid
 flowchart LR
     HR[Reviewer / HR user] --> UI[Angular 21.2 UI]
-    UI -->|HTTP JSON, localhost:8080| API[Spring Boot REST API]
-    API --> EC[Employee controller]
+    UI -->|HTTP JSON; public URL from app-config.js| API[Spring Boot REST API]
+    UI -.->|Bearer token on employee writes only| SEC[Write API security filter]
+    SEC --> EC[Employee controller]
     API --> AC[Salary analytics controller]
     EC --> ES[Employee service / specifications]
     AC --> AS[Salary analytics service]
@@ -17,7 +18,7 @@ flowchart LR
     ER --> DB[(SQLite file)]
 ```
 
-The UI currently reads the employee directory and salary insights. The API also has a single-employee read route. No employee-write route is implemented.
+Employee list/by-ID reads and salary analytics are public. POST, PUT, and DELETE requests for employees require `Authorization: Bearer <token>` matching the backend environment variable `APP_WRITE_API_TOKEN`; an unset token fails closed with HTTP 401. The Angular UI sends its runtime-entered token only on matching write requests to the configured API origin and path. This shared token is a write gate, not individual user authentication or role-based authorization. CORS restricts browser origins but is not an authorization boundary. Use only synthetic, non-sensitive records in a public deployment.
 
 ## 2. Implemented employee directory read
 
@@ -65,7 +66,29 @@ sequenceDiagram
 
 **Currency invariant:** each analytics query is scoped to one requested currency. Country and department filters are applied to the summary and both breakdown queries. No conversion is performed.
 
-## 4. Explicit seed startup path
+## 4. Implemented employee write workflows
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Angular employee management
+    participant Security as Bearer-token filter
+    participant API as Employee REST API
+    participant Service as Employee service
+    participant DB as SQLite
+    User->>UI: Submit validated employee form or confirm deletion
+    UI->>Security: POST /api/employees, PUT /api/employees/{id}, or DELETE /api/employees/{id} with Authorization header
+    Security->>Security: Validate configured shared token; reject absent/invalid token with 401
+    Security->>API: Forward authorized write request
+    API->>Service: Validate request and apply transactional operation
+    Service->>DB: Check uniqueness and persist/remove employee
+    DB-->>Service: Result
+    Service-->>API: DTO or no-content response
+    API-->>UI: 201, 200, or 204; structured 400/404/409 errors
+    UI->>API: Refresh current directory and salary analytics after success
+```
+
+## 5. Explicit seed startup path
 
 ```mermaid
 flowchart LR
@@ -77,7 +100,7 @@ flowchart LR
     Insert --> Normal
 ```
 
-## 5. Deployment target sketch (not deployed)
+## 6. Deployment target sketch (not deployed)
 
 ```mermaid
 flowchart TB

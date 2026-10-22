@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from './api-config';
 
 export interface Employee {
   id: number;
@@ -15,6 +16,9 @@ export interface Employee {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type EmployeeWriteRequest = Pick<Employee,
+  'employeeCode' | 'fullName' | 'email' | 'country' | 'department' | 'jobTitle' | 'currency' | 'annualSalary'>;
 
 export interface EmployeePage {
   content: Employee[];
@@ -65,7 +69,8 @@ export interface SalaryAnalyticsFilterOptions {
 })
 export class EmployeeService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = 'http://localhost:8080/api/employees';
+  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly apiUrl = `${this.apiBaseUrl}/employees`;
 
   getEmployees(query: EmployeeQuery): Observable<EmployeePage> {
     let params = new HttpParams().set('page', query.page).set('size', query.size);
@@ -95,12 +100,28 @@ export class EmployeeService {
     return this.http.get<EmployeePage>(this.apiUrl, { params });
   }
 
+  getEmployeeById(id: number): Observable<Employee> {
+    return this.http.get<Employee>(`${this.apiUrl}/${id}`);
+  }
+
+  createEmployee(employee: EmployeeWriteRequest): Observable<Employee> {
+    return this.http.post<Employee>(this.apiUrl, employee);
+  }
+
+  updateEmployee(id: number, employee: EmployeeWriteRequest): Observable<Employee> {
+    return this.http.put<Employee>(`${this.apiUrl}/${id}`, employee);
+  }
+
+  deleteEmployee(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+
   getSalaryCurrencies(): Observable<string[]> {
-    return this.http.get<string[]>('http://localhost:8080/api/analytics/salary/currencies');
+    return this.http.get<string[]>(`${this.apiBaseUrl}/analytics/salary/currencies`);
   }
 
   getSalaryFilterOptions(): Observable<SalaryAnalyticsFilterOptions> {
-    return this.http.get<SalaryAnalyticsFilterOptions>('http://localhost:8080/api/analytics/salary/filters');
+    return this.http.get<SalaryAnalyticsFilterOptions>(`${this.apiBaseUrl}/analytics/salary/filters`);
   }
 
   getSalaryAnalytics(currency: string, country?: string, department?: string): Observable<SalaryAnalytics> {
@@ -111,6 +132,6 @@ export class EmployeeService {
     if (department?.trim()) {
       params = params.set('department', department.trim());
     }
-    return this.http.get<SalaryAnalytics>('http://localhost:8080/api/analytics/salary', { params });
+    return this.http.get<SalaryAnalytics>(`${this.apiBaseUrl}/analytics/salary`, { params });
   }
 }

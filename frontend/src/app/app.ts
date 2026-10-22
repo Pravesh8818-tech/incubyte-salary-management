@@ -1,12 +1,14 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Employee, EmployeePage, EmployeeQuery, EmployeeService, SalaryAnalytics, SalaryAnalyticsFilterOptions } from './services/employee';
+import { Employee, EmployeePage, EmployeeQuery, EmployeeService, EmployeeWriteRequest, SalaryAnalytics, SalaryAnalyticsFilterOptions } from './services/employee';
+import { Observable } from 'rxjs';
+import { WriteTokenService } from './services/write-token';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -32,6 +34,34 @@ export class App {
   protected readonly salaryFilterOptions = signal<SalaryAnalyticsFilterOptions>({ countries: [], departments: [] });
   protected readonly filterOptionsLoading = signal<boolean>(false);
   protected readonly filterOptionsError = signal<string | null>(null);
+  protected readonly employeeFormVisible = signal(false);
+  protected readonly editingEmployeeId = signal<number | null>(null);
+  protected readonly editLoading = signal(false);
+  protected readonly mutationLoading = signal(false);
+  protected readonly mutationMessage = signal<string | null>(null);
+  protected readonly mutationError = signal<string | null>(null);
+  protected readonly employeeFormError = signal<string | null>(null);
+  protected readonly employeeFieldErrors = signal<Record<string, string>>({});
+  protected readonly writeTokenEntered = signal(false);
+  protected writeTokenDraft = '';
+
+  private readonly formBuilder = inject(FormBuilder);
+  private readonly writeTokenService = inject(WriteTokenService);
+  readonly employeeForm = this.formBuilder.group({
+    employeeCode: ['', Validators.required],
+    fullName: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+    country: ['', Validators.required],
+    department: ['', Validators.required],
+    jobTitle: ['', Validators.required],
+    currency: ['USD', [Validators.required, Validators.pattern(/^[A-Z]{3}$/)]],
+    annualSalary: [null as number | null, [
+      Validators.required,
+      Validators.min(0),
+      Validators.max(99999999.99),
+      Validators.pattern(/^\d+(\.\d{1,2})?$/),
+    ]],
+  });
 
   // Regular variable for search query (two-way binding with ngModel)
   protected searchQuery: string = '';
@@ -41,8 +71,21 @@ export class App {
   private employeeRequestId = 0;
   private analyticsRequestId = 0;
   private filterOptionsRequestId = 0;
+  private editRequestId = 0;
 
   constructor(private employeeService: EmployeeService) {}
+
+  saveWriteToken(): void {
+    this.writeTokenService.setToken(this.writeTokenDraft);
+    this.writeTokenDraft = '';
+    this.writeTokenEntered.set(this.writeTokenService.tokenConfigured());
+  }
+
+  clearWriteToken(): void {
+    this.writeTokenService.clearToken();
+    this.writeTokenDraft = '';
+    this.writeTokenEntered.set(false);
+  }
 
   // Lifecycle hook
   ngOnInit(): void {
@@ -76,8 +119,13 @@ export class App {
         this.currenciesLoading.set(false);
         this.salaryCurrencies.set(currencies);
         if (currencies.length > 0) {
-          this.selectedCurrency = currencies.includes('USD') ? 'USD' : currencies[0];
+          if (!currencies.includes(this.selectedCurrency)) {
+            this.selectedCurrency = currencies.includes('USD') ? 'USD' : currencies[0];
+          }
           this.loadSalaryAnalytics();
+        } else {
+          this.selectedCurrency = '';
+          this.salaryAnalytics.set(null);
         }
       },
       error: () => {
@@ -126,6 +174,10 @@ export class App {
     this.employeeService.getEmployees(query).subscribe({
       next: (page: EmployeePage) => {
         if (requestId !== this.employeeRequestId) return;
+        if (query.page > 0 && query.page >= page.totalPages) {
+          this.loadEmployees(Math.max(0, page.totalPages - 1));
+          return;
+        }
         this.employees.set(page.content);
         this.pageIndex.set(page.number);
         this.pageSize.set(page.size);
@@ -204,5 +256,160 @@ export class App {
       return `Page ${this.pageIndex() + 1} of ${this.totalPages()} · ${this.totalElements()} employees`;
     }
     return `Page ${this.pageIndex() + 1} of ${this.totalPages()} · Showing ${this.firstVisibleEmployee()}–${this.lastVisibleEmployee()} of ${this.totalElements()}`;
+  }
+
+  openCreateForm(): void {
+    ++this.editRequestId;
+    this.editLoading.set(false);
+    this.resetMutationMessages();
+    this.editingEmployeeId.set(null);
+    this.employeeForm.reset({
+      employeeCode: '', fullName: '', email: '', country: '', department: '', jobTitle: '',
+      currency: this.selectedCurrency || 'USD', annualSalary: null,
+    });
+    this.employeeFormVisible.set(true);
+  }
+
+  editEmployee(employee: Employee): void {
+    this.resetMutationMessages();
+    const requestId = ++this.editRequestId;
+    this.editingEmployeeId.set(employee.id);
+    this.employeeFormVisible.set(true);
+    this.editLoading.set(true);
+    this.employeeFormError.set(null);
+    this.employeeService.getEmployeeById(employee.id).subscribe({
+      next: (loaded) => {
+        if (requestId !== this.editRequestId) return;
+        this.employeeForm.patchValue({
+          employeeCode: loaded.employeeCode,
+          fullName: loaded.fullName,
+          email: loaded.email,
+          country: loaded.country,
+          department: loaded.department,
+          jobTitle: loaded.jobTitle,
+          currency: loaded.currency,
+          annualSalary: loaded.annualSalary,
+        });
+        this.editLoading.set(false);
+      },
+      error: (error) => {
+        if (requestId !== this.editRequestId) return;
+        this.editLoading.set(false);
+        this.employeeFormError.set(this.apiErrorMessage(error, 'Could not load employee details.'));
+      },
+    });
+  }
+
+  closeEmployeeForm(): void {
+    ++this.editRequestId;
+    this.employeeFormVisible.set(false);
+    this.editLoading.set(false);
+    this.mutationLoading.set(false);
+    this.editingEmployeeId.set(null);
+    this.employeeFormError.set(null);
+  }
+
+  saveEmployee(): void {
+    if (this.mutationLoading()) return;
+    this.employeeFieldErrors.set({});
+    if (this.employeeForm.invalid) {
+      this.employeeForm.markAllAsTouched();
+      return;
+    }
+    const value = this.employeeForm.getRawValue();
+    const request: EmployeeWriteRequest = {
+      employeeCode: value.employeeCode!.trim(),
+      fullName: value.fullName!.trim(),
+      email: value.email!.trim(),
+      country: value.country!.trim(),
+      department: value.department!.trim(),
+      jobTitle: value.jobTitle!.trim(),
+      currency: value.currency!.trim().toUpperCase(),
+      annualSalary: Number(value.annualSalary),
+    };
+    const id = this.editingEmployeeId();
+    const operation: Observable<Employee> = id === null
+      ? this.employeeService.createEmployee(request)
+      : this.employeeService.updateEmployee(id, request);
+    this.mutationLoading.set(true);
+    this.employeeFormError.set(null);
+    operation.subscribe({
+      next: () => {
+        this.mutationLoading.set(false);
+        this.employeeFormVisible.set(false);
+        this.editingEmployeeId.set(null);
+        this.mutationMessage.set(id === null ? 'Employee created successfully.' : 'Employee updated successfully.');
+        this.refreshAfterMutation();
+      },
+      error: (error) => {
+        this.mutationLoading.set(false);
+        this.applyMutationError(error);
+      },
+    });
+  }
+
+  deleteEmployee(employee: Employee): void {
+    if (this.mutationLoading()) return;
+    const confirmed = window.confirm(`Delete ${employee.fullName} (${employee.employeeCode})? This action cannot be undone.`);
+    if (!confirmed) return;
+    this.resetMutationMessages();
+    this.mutationLoading.set(true);
+    this.employeeService.deleteEmployee(employee.id).subscribe({
+      next: () => {
+        this.mutationLoading.set(false);
+        this.mutationMessage.set(`${employee.fullName} was deleted.`);
+        this.refreshAfterMutation();
+      },
+      error: (error) => {
+        this.mutationLoading.set(false);
+        this.mutationError.set(this.apiErrorMessage(error, 'Could not delete the employee.'));
+      },
+    });
+  }
+
+  isFieldInvalid(field: keyof typeof this.employeeForm.controls): boolean {
+    const control = this.employeeForm.controls[field];
+    return (control.invalid && (control.dirty || control.touched)) || !!this.employeeFieldErrors()[field];
+  }
+
+  employeeFieldError(field: string, fallback: string): string {
+    return this.employeeFieldErrors()[field] ?? fallback;
+  }
+
+  clearEmployeeFieldError(field: string): void {
+    const errors = { ...this.employeeFieldErrors() };
+    delete errors[field];
+    this.employeeFieldErrors.set(errors);
+  }
+
+  private refreshAfterMutation(): void {
+    this.loadEmployees(this.pageIndex());
+    this.loadSalaryCurrencies();
+  }
+
+  private resetMutationMessages(): void {
+    this.mutationMessage.set(null);
+    this.mutationError.set(null);
+    this.employeeFormError.set(null);
+    this.employeeFieldErrors.set({});
+  }
+
+  private applyMutationError(error: unknown): void {
+    const body = error instanceof HttpErrorResponse ? error.error : null;
+    const fields = body && typeof body === 'object' ? body.fields as Record<string, string> | undefined : undefined;
+    if (fields) {
+      this.employeeFieldErrors.set(fields);
+    }
+    this.employeeFormError.set(this.apiErrorMessage(error, 'Could not save the employee.'));
+  }
+
+  private apiErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse && error.status === 401) {
+      return 'The write API rejected this request. Enter or check the write token, then try again.';
+    }
+    if (error instanceof HttpErrorResponse && error.error && typeof error.error.message === 'string') {
+      return error.error.message;
+    }
+    return fallback;
   }
 }
